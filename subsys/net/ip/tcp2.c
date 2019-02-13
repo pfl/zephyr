@@ -1105,7 +1105,10 @@ static struct net_pkt *tcp_make(struct tcp *conn, u8_t th_flags)
 	th->th_sport = htons(conn->sport);
 	th->th_dport = htons(conn->dport);
 	th->th_seq = htonl(conn->seq);
-	th->th_ack = htonl(conn->ack);
+
+	if (th_flags & TH_ACK) {
+		th->th_ack = htonl(conn->ack);
+	}
 
 	pkt->iface = conn->iface;
 
