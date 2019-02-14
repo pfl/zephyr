@@ -747,7 +747,7 @@ next_state:
 		if (th && th->th_flags == (TH_ACK | TH_FIN)
 				&& th_seq(th) == conn->ack) { /* full-close */
 			conn->ack++;
-			tcp_out(conn, TH_ACK);
+			tcp_out(conn, TH_ACK);/* TODO: this could be optional */
 			next = TCP_CLOSE_WAIT;
 			break;
 		}
