@@ -88,6 +88,9 @@ LOG_MODULE_REGISTER(net_tcp2);
 #define ip_get(_x) ((struct net_ipv4_hdr *) net_pkt_ip_data((_x)))
 #define th_get(_x) ((struct tcphdr *) (ip_get(_x) + 1))
 
+#define PKT_DST 0
+#define PKT_SRC 1
+
 struct tcphdr {
 	u16_t th_sport;
 	u16_t th_dport;
@@ -195,31 +198,6 @@ struct tp {
 	const char *op;
 };
 
-static sys_slist_t tcp_conns = SYS_SLIST_STATIC_INIT(&tcp_conns);
-
-static bool tp_enabled = IS_ENABLED(CONFIG_NET_TP);
-static enum tp_type tp_state;
-static sys_slist_t tp_mem = SYS_SLIST_STATIC_INIT(&tp_mem);
-static sys_slist_t tp_nbufs = SYS_SLIST_STATIC_INIT(&tp_nbufs);
-static sys_slist_t tp_npkts = SYS_SLIST_STATIC_INIT(&tp_npkts);
-static sys_slist_t tp_q = SYS_SLIST_STATIC_INIT(&tp_q);
-
-static void tcp_in(struct tcp *conn, struct net_pkt *pkt);
-static void tcp_out(struct tcp *conn, u8_t th_flags);
-static void tcp_timer_cb(struct k_timer *timer);
-static void tcp_timer_cancel(struct tcp *conn);
-static struct tcp_win *tcp_win_new(const char *name);
-static void tcp_win_free(struct tcp_win *win);
-static struct net_pkt *net_pkt_get(size_t len);
-
-ssize_t tcp_recv(int fd, void *buf, size_t len, int flags);
-ssize_t tcp_send(int fd, const void *buf, size_t len, int flags);
-
-NET_BUF_POOL_VAR_DEFINE(tcp2_nbufs, 16, 128, NULL);
-
-#define PKT_DST 0
-#define PKT_SRC 1
-
 struct tp_mem {
 	sys_snode_t next;
 	const char *file;
@@ -241,6 +219,28 @@ struct tp_npkt {
 	const char *file;
 	int line;
 };
+
+static sys_slist_t tcp_conns = SYS_SLIST_STATIC_INIT(&tcp_conns);
+
+static bool tp_enabled = IS_ENABLED(CONFIG_NET_TP);
+static enum tp_type tp_state;
+static sys_slist_t tp_mem = SYS_SLIST_STATIC_INIT(&tp_mem);
+static sys_slist_t tp_nbufs = SYS_SLIST_STATIC_INIT(&tp_nbufs);
+static sys_slist_t tp_npkts = SYS_SLIST_STATIC_INIT(&tp_npkts);
+static sys_slist_t tp_q = SYS_SLIST_STATIC_INIT(&tp_q);
+
+static void tcp_in(struct tcp *conn, struct net_pkt *pkt);
+static void tcp_out(struct tcp *conn, u8_t th_flags);
+static void tcp_timer_cb(struct k_timer *timer);
+static void tcp_timer_cancel(struct tcp *conn);
+static struct tcp_win *tcp_win_new(const char *name);
+static void tcp_win_free(struct tcp_win *win);
+static struct net_pkt *net_pkt_get(size_t len);
+
+ssize_t tcp_recv(int fd, void *buf, size_t len, int flags);
+ssize_t tcp_send(int fd, const void *buf, size_t len, int flags);
+
+NET_BUF_POOL_VAR_DEFINE(tcp2_nbufs, 16, 128, NULL);
 
 static const char *basename(const char *path)
 {
