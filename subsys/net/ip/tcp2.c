@@ -691,7 +691,9 @@ static void tcp_in(struct tcp *conn, struct net_pkt *pkt)
 	enum tcp_state next = TCP_NONE;
 	struct tcphdr *th = pkt ? th_get(pkt) : NULL;
 
-	tcp_dbg("%s %s %u/%u", pkt ? tcp_th(conn, pkt) : "",
+	tcp_dbg("%s %s %u/%u", (pkt && net_pkt_get_len(pkt) >=
+		(sizeof(struct net_ipv4_hdr) + sizeof(struct tcphdr))) ?
+		tcp_th(conn, pkt) : "",
 		conn->state != TCP_NONE ? tcp_state_to_str(conn->state, false) :
 		"", conn->seq, conn->ack);
 next_state:
@@ -1245,9 +1247,15 @@ static bool tp_tap_input(struct net_pkt *pkt)
 void tcp_input(struct net_pkt *pkt)
 {
 	struct tcp *conn;
-	struct tcphdr *th = th_get(pkt);
+	struct tcphdr *th = (pkt && net_pkt_get_len(pkt) >=
+		(sizeof(struct net_ipv4_hdr) + sizeof(struct tcphdr))) ?
+		th_get(pkt) : NULL;
 
 	if (tp_tap_input(pkt)) {
+		goto out;
+	}
+
+	if (th == NULL) {
 		goto out;
 	}
 
@@ -1256,7 +1264,9 @@ void tcp_input(struct net_pkt *pkt)
 		conn = tcp_conn_new(pkt);
 	}
 
-	tcp_in(conn, pkt);
+	if (conn) {
+		tcp_in(conn, pkt);
+	}
 out:
 	return;
 }
