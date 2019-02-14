@@ -164,6 +164,8 @@ struct tcp { /* TCP connection */
 enum tp_type { /* Test protocol message type */
 	TP_NONE = 0,
 	TP_COMMAND,
+	TP_CONFIG_REQUEST,
+	TP_CONFIG_REPLY,
 	TP_INTROSPECT_REQUEST,
 	TP_INTROSPECT_REPLY,
 	TP_INTROSPECT_MEMORY_REQUEST,
