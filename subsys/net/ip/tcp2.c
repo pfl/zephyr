@@ -868,6 +868,7 @@ static enum tp_type tp_msg_to_type(const char *s)
 } while (0)
 
 	is_tp(s, TP_COMMAND);
+	is_tp(s, TP_CONFIG_REQUEST);
 	is_tp(s, TP_INTROSPECT_REQUEST);
 	is_tp(s, TP_DEBUG_STOP);
 	is_tp(s, TP_DEBUG_STEP);
@@ -1068,6 +1069,9 @@ void tp_input(struct net_pkt *pkt)
 		if (is("RECV", tp->op)) {
 			tcp_dbg("rcv=%zd", tcp_recv(0, NULL, 0, 0));
 		}
+		break;
+	case TP_CONFIG_REQUEST:
+		tcp_dbg("msg=%s data=%s", tp->msg, tp->data);
 		break;
 	case TP_INTROSPECT_REQUEST:
 		json_len = sizeof(buf);
