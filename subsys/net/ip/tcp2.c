@@ -223,6 +223,7 @@ static sys_slist_t tcp_conns = SYS_SLIST_STATIC_INIT(&tcp_conns);
 
 static bool tp_enabled = IS_ENABLED(CONFIG_NET_TP);
 static enum tp_type tp_state;
+static bool tp_tcp_echo_enabled = false;
 static sys_slist_t tp_mem = SYS_SLIST_STATIC_INIT(&tp_mem);
 static sys_slist_t tp_nbufs = SYS_SLIST_STATIC_INIT(&tp_nbufs);
 static sys_slist_t tp_npkts = SYS_SLIST_STATIC_INIT(&tp_npkts);
@@ -765,9 +766,13 @@ next_state:
 			conn->ack += data_len;
 			tcp_out(conn, TH_ACK); /* ack the data */
 
-			data_len = conn->snd->len; /* XXX */
-			tcp_out(conn, TH_PSH); /* echo the input */
-			conn->seq += data_len;
+			if (tp_tcp_echo_enabled) {
+				/* TODO: Move this out of the state machine
+				 * switch() */
+				data_len = conn->snd->len;
+				tcp_out(conn, TH_PSH); /* echo the input */
+				conn->seq += data_len;
+			}
 		}
 		if (th && th->th_flags == TH_ACK && th_seq(th) == conn->ack) {
 			//tcp_win_clear(&conn->snd);
