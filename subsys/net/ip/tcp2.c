@@ -1028,6 +1028,74 @@ static struct tp *json_to_tp(void *data, size_t data_len)
 	return &tp;
 }
 
+struct tp_msg {
+	const char *msg;
+};
+
+static const struct json_obj_descr tp_msg_dsc[] = {
+	JSON_OBJ_DESCR_PRIM(struct tp_msg, msg, JSON_TOK_STRING),
+};
+
+static enum tp_type json_decode_msg_type(void *data, size_t data_len)
+{
+	struct tp_msg tp;
+
+	memset(&tp, 0, sizeof(tp));
+
+	json_obj_parse(data, data_len, tp_msg_dsc, ARRAY_SIZE(tp_msg_dsc), &tp);
+
+	tcp_dbg("msg=%s", tp.msg);
+
+	return tp.msg ? tp_msg_to_type(tp.msg) : TP_NONE;
+}
+
+struct tp_entry {
+	const char *key;
+	const char *value;
+};
+
+static const struct json_obj_descr tp_entry_dsc[] = {
+	JSON_OBJ_DESCR_PRIM(struct tp_entry, key, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct tp_entry, value, JSON_TOK_STRING),
+};
+
+struct tp_new {
+	const char *msg;
+	struct tp_entry data[10];
+	size_t num_entries;
+};
+
+static const struct json_obj_descr tp_new_dsc[] = {
+	JSON_OBJ_DESCR_PRIM(struct tp_new, msg, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_OBJ_ARRAY(struct tp_new, data, 10, num_entries,
+				 tp_entry_dsc, ARRAY_SIZE(tp_entry_dsc)),
+};
+
+static struct tp_new *json_to_tp_new(void *data, size_t data_len)
+{
+	static struct tp_new tp;
+
+	tcp_dbg("");
+
+	memset(&tp, 0, sizeof(tp));
+
+	if (json_obj_parse(data, data_len, tp_new_dsc, ARRAY_SIZE(tp_new_dsc),
+			&tp) < 0) {
+		tcp_err("json_obj_parse()");
+	}
+
+	tcp_dbg("msg=%s, num_entries=%zu", tp.msg, tp.num_entries);
+
+	{
+		int i;
+		for (i = 0; i < tp.num_entries; i++) {
+			tcp_dbg("%s=%s", tp.data[i].key, tp.data[i].value);
+		}
+	}
+
+	return &tp;
+}
+
 #if defined CONFIG_NET_TP
 /* Test protolol input */
 void tp_input(struct net_pkt *pkt)
@@ -1038,6 +1106,8 @@ void tp_input(struct net_pkt *pkt)
 	struct tcp *conn = tcp_conn_search(pkt);
 	size_t json_len = 0;
 	struct tp *tp;
+	struct tp_new *tp_new;
+	enum tp_type type;
 	static char buf[512];
 
 	net_pkt_skip(pkt, sizeof(*ip) + sizeof(*uh));
@@ -1045,9 +1115,27 @@ void tp_input(struct net_pkt *pkt)
 	buf[data_len] = '\0';
 	data_len += 1;
 
-	tp = json_to_tp(buf, data_len);
+	type = json_decode_msg_type(buf, data_len);
 
-	switch (tp->type) {
+	data_len = ntohs(uh->len) - sizeof(*uh);
+	net_pkt_cursor_init(pkt);
+	net_pkt_skip(pkt, sizeof(*ip) + sizeof(*uh));
+	net_pkt_read_new(pkt, buf, data_len);
+	buf[data_len] = '\0';
+	data_len += 1;
+
+	switch (type) {
+	case TP_NONE:
+		break;
+	case TP_CONFIG_REQUEST:
+		tp_new = json_to_tp_new(buf, data_len);
+		break;
+	default:
+		tp = json_to_tp(buf, data_len);
+		break;
+	}
+
+	switch (type) {
 	case TP_COMMAND:
 		if (is("CONNECT", tp->op)) {
 			u8_t data_to_send[128];
@@ -1071,7 +1159,6 @@ void tp_input(struct net_pkt *pkt)
 		}
 		break;
 	case TP_CONFIG_REQUEST:
-		tcp_dbg("msg=%s data=%s", tp->msg, tp->data);
 		break;
 	case TP_INTROSPECT_REQUEST:
 		json_len = sizeof(buf);
