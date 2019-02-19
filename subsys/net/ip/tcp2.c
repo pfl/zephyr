@@ -281,7 +281,7 @@ void *tp_malloc(size_t size, char *file, int line)
 
 void tp_free(void *ptr)
 {
-	struct tp_mem *m = ptr - sizeof(struct tp_mem);
+	struct tp_mem *m = (void *)((u8_t *) ptr - sizeof(struct tp_mem));
 
 	if (!sys_slist_find_and_remove(&tp_mem, (sys_snode_t *) m)) {
 		tcp_assert(false, "Invalid free()");
