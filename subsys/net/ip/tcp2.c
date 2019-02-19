@@ -70,9 +70,9 @@ LOG_MODULE_REGISTER(net_tcp2);
 #define is(_a, _b) (strcmp((_a), (_b)) == 0)
 
 #define tcp_dbg(fmt, args...) printk("%s: " fmt "\n", __func__, ## args)
-#define tcp_err(fmt, args...) do {			\
-	LOG_ERR("Error: " fmt, ## args);		\
-	k_oops();					\
+#define tcp_err(fmt, args...) do {				\
+	printk("%s: Error: " fmt "\n", __func__, ## args);	\
+	k_oops();						\
 } while (0)
 
 #define tcp_assert(cond, fmt, args...) do {			\
