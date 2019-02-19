@@ -223,7 +223,7 @@ static sys_slist_t tcp_conns = SYS_SLIST_STATIC_INIT(&tcp_conns);
 
 static bool tp_enabled = IS_ENABLED(CONFIG_NET_TP);
 static enum tp_type tp_state;
-static bool tp_tcp_echo_enabled = false;
+static bool tp_tcp_echo_enabled;
 static sys_slist_t tp_mem = SYS_SLIST_STATIC_INIT(&tp_mem);
 static sys_slist_t tp_nbufs = SYS_SLIST_STATIC_INIT(&tp_nbufs);
 static sys_slist_t tp_npkts = SYS_SLIST_STATIC_INIT(&tp_npkts);
@@ -775,7 +775,7 @@ next_state:
 			}
 		}
 		if (th && th->th_flags == TH_ACK && th_seq(th) == conn->ack) {
-			//tcp_win_clear(&conn->snd);
+			/* tcp_win_clear(&conn->snd); */
 			break;
 		}
 		break; /* TODO: Catch all the rest here */
