@@ -224,7 +224,7 @@ static sys_slist_t tcp_conns = SYS_SLIST_STATIC_INIT(&tcp_conns);
 
 static bool tp_enabled = IS_ENABLED(CONFIG_NET_TP);
 static enum tp_type tp_state;
-static bool tp_tcp_echo_enabled;
+static bool tp_tcp_echo;
 static sys_slist_t tp_mem = SYS_SLIST_STATIC_INIT(&tp_mem);
 static sys_slist_t tp_nbufs = SYS_SLIST_STATIC_INIT(&tp_nbufs);
 static sys_slist_t tp_npkts = SYS_SLIST_STATIC_INIT(&tp_npkts);
@@ -767,7 +767,7 @@ next_state:
 			conn->ack += data_len;
 			tcp_out(conn, TH_ACK); /* ack the data */
 
-			if (tp_tcp_echo_enabled) {
+			if (tp_tcp_echo) {
 				/* TODO: Move this out of the state machine
 				 * switch() */
 				data_len = conn->snd->len;
@@ -1097,6 +1097,36 @@ static struct tp_new *json_to_tp_new(void *data, size_t data_len)
 	return &tp;
 }
 
+#define TP_BOOL 1
+
+static void tp_new_find_and_apply(struct tp_new *tp, const char *key,
+					void *value, int type)
+{
+	bool found = false;
+	int i;
+
+	for (i = 0; i < tp->num_entries; i++) {
+		if (is(key, tp->data[i].key)) {
+			found = true;
+			break;
+		}
+	}
+
+	if (found) {
+		switch (type) {
+		case TP_BOOL: {
+			bool new_value, old = *((bool *) value);
+			new_value = atoi(tp->data[i].value);
+			*((bool *) value) = new_value;
+			tcp_dbg("%s %d->%d", key, old, new_value);
+			break;
+		}
+		default:
+			tcp_err("Unimplemented");
+		}
+	}
+}
+
 #if defined CONFIG_NET_TP
 /* Test protolol input */
 void tp_input(struct net_pkt *pkt)
@@ -1160,6 +1190,8 @@ void tp_input(struct net_pkt *pkt)
 		}
 		break;
 	case TP_CONFIG_REQUEST:
+		tp_new_find_and_apply(tp_new, "tcp_echo", &tp_tcp_echo,
+					TP_BOOL);
 		break;
 	case TP_INTROSPECT_REQUEST:
 		json_len = sizeof(buf);
