@@ -54,6 +54,8 @@
  *       -DOVERLAY_CONFIG="overlay-tcp2.conf;overlay-tcp2-eth.conf" ..
  * 3. Connect with telnet:
  *     # telnet 192.0.2.1 4242
+ *    or netcat:
+ *     # nc 192.0.2.1 4242
  */
 
 #define LOG_LEVEL 4
