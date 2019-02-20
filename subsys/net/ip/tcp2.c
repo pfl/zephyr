@@ -243,7 +243,7 @@ static struct net_pkt *net_pkt_get(size_t len);
 ssize_t tcp_recv(int fd, void *buf, size_t len, int flags);
 ssize_t tcp_send(int fd, const void *buf, size_t len, int flags);
 
-NET_BUF_POOL_VAR_DEFINE(tcp2_nbufs, 16, 128, NULL);
+NET_BUF_POOL_DEFINE(tcp2_nbufs, 64/*count*/, 128/*size*/, 0, NULL);
 
 static const char *basename(const char *path)
 {
