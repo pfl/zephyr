@@ -759,7 +759,13 @@ next_state:
 			struct net_ipv4_hdr *ip = ip_get(pkt);
 			size_t th_off = th->th_off * 4;
 			size_t data_len = ntohs(ip->len) - sizeof(*ip) - th_off;
-			void *data = th_get(pkt) + th_off;
+			static u8_t data[64];/* The absence of _linearize()
+						leads to this temp workaround */
+			tcp_assert(data_len <= sizeof(data),
+					"Insufficient buffer for data");
+
+			net_pkt_skip(pkt, sizeof(*ip) + th_off);
+			net_pkt_read_new(pkt, data, data_len);
 
 			tcp_win_push(conn->rcv, data, data_len);
 			tcp_win_push(conn->snd, data, data_len);
