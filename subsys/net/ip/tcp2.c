@@ -93,6 +93,11 @@ LOG_MODULE_REGISTER(net_tcp2);
 #define PKT_DST 0
 #define PKT_SRC 1
 
+#define tcp_nbuf_alloc(_len) \
+	tp_nbuf_alloc(_len, basename(__FILE__), __LINE__, __func__)
+#define tcp_nbuf_unref(_nbuf) \
+	tp_nbuf_unref(_nbuf, basename(__FILE__), __LINE__, __func__)
+
 struct tcphdr {
 	u16_t th_sport;
 	u16_t th_dport;
@@ -320,7 +325,7 @@ static struct net_buf *tp_nbuf_alloc(size_t len, const char *file, int line,
 		basename(file), line, func);
 
 	tp_nbuf->nbuf = nbuf;
-	tp_nbuf->file = basename(file);
+	tp_nbuf->file = file;
 	tp_nbuf->line = line;
 
 	sys_slist_append(&tp_nbufs, (sys_snode_t *) tp_nbuf);
@@ -334,8 +339,7 @@ static void tp_nbuf_unref(struct net_buf *nbuf, const char *file, int line,
 	bool found = false;
 	struct tp_nbuf *tp_nbuf;
 
-	tcp_dbg("len=%d %p %s:%d %s()", nbuf->len, nbuf,
-		basename(file), line, func);
+	tcp_dbg("len=%d %p %s:%d %s()", nbuf->len, nbuf, file, line, func);
 
 	SYS_SLIST_FOR_EACH_CONTAINER(&tp_nbufs, tp_nbuf, next) {
 		if (tp_nbuf->nbuf == nbuf) {
@@ -344,8 +348,7 @@ static void tp_nbuf_unref(struct net_buf *nbuf, const char *file, int line,
 		}
 	}
 
-	tcp_assert(found, "Invalid tp_nbuf_unref(%p): %s:%d", nbuf,
-		basename(file), line);
+	tcp_assert(found, "Invalid tp_nbuf_unref(%p): %s:%d", nbuf, file, line);
 
 	sys_slist_find_and_remove(&tp_nbufs, (sys_snode_t *) tp_nbuf);
 
@@ -363,9 +366,6 @@ static void tp_nbstat(void)
 			tp_nbuf->nbuf->len);
 	}
 }
-
-#define tcp_nbuf_alloc(_len) tp_nbuf_alloc(_len, __FILE__, __LINE__, __func__)
-#define tcp_nbuf_unref(_nbuf) tp_nbuf_unref(_nbuf, __FILE__, __LINE__, __func__)
 
 void tp_npstat(void)
 {
