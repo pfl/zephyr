@@ -754,6 +754,14 @@ next_state:
 			next = TCP_CLOSE_WAIT;
 			break;
 		}
+		if (th && th->th_flags & TH_PSH && th_seq(th) < conn->ack) {
+			tcp_out(conn, TH_ACK); /* peer has resent */
+			break;
+		}
+		if (th && th->th_flags & TH_PSH && th_seq(th) > conn->ack) {
+			tcp_assert(false, "Unimplemeted: send RESET here");
+			break;
+		}
 		/* Non piggybacking version for clarity now */
 		if (th && th->th_flags & TH_PSH && th_seq(th) == conn->ack) {
 			/* TODO: next 4 lines into one op */
