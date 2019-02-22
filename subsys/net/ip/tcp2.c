@@ -168,6 +168,7 @@ struct tcp { /* TCP connection */
 	struct tcp_win *rcv;
 	struct tcp_win *snd;
 	sys_slist_t retr;
+	int retries; /* number of retransmissions */
 	struct k_timer timer;
 	struct net_if *iface;
 };
@@ -228,6 +229,7 @@ struct tp_pkt {
 };
 
 static int tcp_rto = 500; /* Retransmission timeout, msec */
+static int tcp_retries = 3;
 static sys_slist_t tcp_conns = SYS_SLIST_STATIC_INIT(&tcp_conns);
 
 static bool tp_enabled = IS_ENABLED(CONFIG_NET_TP);
@@ -486,6 +488,7 @@ static struct tcp *tcp_conn_new(struct net_pkt *pkt)
 	conn->rcv = tcp_win_new("RCV");
 	conn->snd = tcp_win_new("SND");
 
+	conn->retries = tcp_retries;
 	sys_slist_init(&conn->retr);
 	k_timer_init(&conn->timer, tcp_retransmit, NULL);
 
@@ -1225,6 +1228,8 @@ void tp_input(struct net_pkt *pkt)
 		break;
 	case TP_CONFIG_REQUEST:
 		tp_new_find_and_apply(tp_new, "tcp_rto", &tcp_rto, TP_INT);
+		tp_new_find_and_apply(tp_new, "tcp_retries", &tcp_retries,
+					TP_INT);
 		tp_new_find_and_apply(tp_new, "tcp_echo", &tp_tcp_echo,
 					TP_BOOL);
 		break;
@@ -1339,9 +1344,19 @@ static void tcp_retransmit(struct k_timer *timer)
 
 	tcp_dbg("%s", tcp_th(conn, pkt));
 
-	tcp_pkt_send(conn, tcp_pkt_clone(pkt), false);
+	if (conn->retries > 0) {
+		tcp_pkt_send(conn, tcp_pkt_clone(pkt), false);
 
-	tcp_timer_subscribe(conn, pkt);
+		tcp_timer_subscribe(conn, pkt);
+
+		conn->retries--;
+	} else {
+		while ((node = sys_slist_get(&conn->retr))) {
+			pkt = CONTAINER_OF(node, struct net_pkt, next);
+			tcp_pkt_unref(pkt);
+		}
+		tcp_conn_delete(conn);
+	}
 }
 
 static void tcp_timer_cancel(struct tcp *conn)
@@ -1368,6 +1383,7 @@ static void tcp_add_to_retransmit(struct tcp *conn, struct net_pkt *pkt)
 	sys_slist_append(&conn->retr, &pkt->next);
 
 	if (subscribe) {
+		conn->retries = tcp_retries;
 		tcp_timer_subscribe(conn, pkt);
 	}
 }
