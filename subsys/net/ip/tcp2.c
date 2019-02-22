@@ -1115,7 +1115,8 @@ static struct tp_new *json_to_tp_new(void *data, size_t data_len)
 	return &tp;
 }
 
-#define TP_BOOL 1
+#define TP_BOOL	1
+#define TP_INT	2
 
 static void tp_new_find_and_apply(struct tp_new *tp, const char *key,
 					void *value, int type)
@@ -1137,6 +1138,13 @@ static void tp_new_find_and_apply(struct tp_new *tp, const char *key,
 			new_value = atoi(tp->data[i].value);
 			*((bool *) value) = new_value;
 			tcp_dbg("%s %d->%d", key, old, new_value);
+			break;
+		}
+		case TP_INT: {
+			int new_value, old_value = *((int *) value);
+			new_value = atoi(tp->data[i].value);
+			*((int *) value) = new_value;
+			tcp_dbg("%s %d->%d", key, old_value, new_value);
 			break;
 		}
 		default:
