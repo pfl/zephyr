@@ -1052,14 +1052,20 @@ static const struct json_obj_descr tp_msg_dsc[] = {
 	JSON_OBJ_DESCR_PRIM(struct tp_msg, msg, JSON_TOK_STRING),
 };
 
-static enum tp_type json_decode_msg_type(void *data, size_t data_len)
+static enum tp_type json_decode_msg(void *data, size_t data_len)
 {
+	int decoded;
 	struct tp_msg tp;
 
 	memset(&tp, 0, sizeof(tp));
 
-	json_obj_parse(data, data_len, tp_msg_dsc, ARRAY_SIZE(tp_msg_dsc), &tp);
-
+	decoded = json_obj_parse(data, data_len, tp_msg_dsc,
+					ARRAY_SIZE(tp_msg_dsc), &tp);
+#if 0
+	if ((decoded & 1) == false) { /* TODO: this fails, why? */
+		tcp_err("json_obj_parse()");
+	}
+#endif
 	tcp_dbg("msg=%s", tp.msg);
 
 	return tp.msg ? tp_msg_to_type(tp.msg) : TP_NONE;
@@ -1090,23 +1096,19 @@ static const struct json_obj_descr tp_new_dsc[] = {
 static struct tp_new *json_to_tp_new(void *data, size_t data_len)
 {
 	static struct tp_new tp;
-
-	tcp_dbg("");
+	int i;
 
 	memset(&tp, 0, sizeof(tp));
 
 	if (json_obj_parse(data, data_len, tp_new_dsc, ARRAY_SIZE(tp_new_dsc),
-			&tp) < 0) {
+				&tp) < 0) {
 		tcp_err("json_obj_parse()");
 	}
 
-	tcp_dbg("msg=%s, num_entries=%zu", tp.msg, tp.num_entries);
+	tcp_dbg("%s", tp.msg);
 
-	{
-		int i;
-		for (i = 0; i < tp.num_entries; i++) {
-			tcp_dbg("%s=%s", tp.data[i].key, tp.data[i].value);
-		}
+	for (i = 0; i < tp.num_entries; i++) {
+		tcp_dbg("%s=%s", tp.data[i].key, tp.data[i].value);
 	}
 
 	return &tp;
@@ -1161,7 +1163,7 @@ void tp_input(struct net_pkt *pkt)
 	buf[data_len] = '\0';
 	data_len += 1;
 
-	type = json_decode_msg_type(buf, data_len);
+	type = json_decode_msg(buf, data_len);
 
 	data_len = ntohs(uh->len) - sizeof(*uh);
 	net_pkt_cursor_init(pkt);
