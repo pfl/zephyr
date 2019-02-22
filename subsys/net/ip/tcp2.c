@@ -230,6 +230,7 @@ struct tp_pkt {
 
 static int tcp_rto = 500; /* Retransmission timeout, msec */
 static int tcp_retries = 3;
+static int tcp_window = 1280; /* Receive window size */
 static sys_slist_t tcp_conns = SYS_SLIST_STATIC_INIT(&tcp_conns);
 
 static bool tp_enabled = IS_ENABLED(CONFIG_NET_TP);
@@ -475,7 +476,7 @@ static struct tcp *tcp_conn_new(struct net_pkt *pkt)
 	struct tcp *conn = tcp_calloc(1, sizeof(struct tcp));
 	struct tcphdr *th = th_get(pkt);
 
-	conn->win = 1280;
+	conn->win = tcp_window;
 
 	conn->src = sockaddr_new(pkt, PKT_DST);
 	conn->dst = sockaddr_new(pkt, PKT_SRC);
@@ -1243,6 +1244,8 @@ void tp_input(struct net_pkt *pkt)
 	case TP_CONFIG_REQUEST:
 		tp_new_find_and_apply(tp_new, "tcp_rto", &tcp_rto, TP_INT);
 		tp_new_find_and_apply(tp_new, "tcp_retries", &tcp_retries,
+					TP_INT);
+		tp_new_find_and_apply(tp_new, "tcp_window", &tcp_window,
 					TP_INT);
 		tp_new_find_and_apply(tp_new, "tcp_echo", &tp_tcp_echo,
 					TP_BOOL);
