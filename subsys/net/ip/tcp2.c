@@ -219,7 +219,7 @@ struct tp_nbuf {
 	int line;
 };
 
-struct tp_npkt {
+struct tp_pkt {
 	sys_snode_t next;
 	struct net_pkt *pkt;
 	const char *file;
@@ -234,7 +234,7 @@ static enum tp_type tp_state;
 static bool tp_tcp_echo;
 static sys_slist_t tp_mem = SYS_SLIST_STATIC_INIT(&tp_mem);
 static sys_slist_t tp_nbufs = SYS_SLIST_STATIC_INIT(&tp_nbufs);
-static sys_slist_t tp_npkts = SYS_SLIST_STATIC_INIT(&tp_npkts);
+static sys_slist_t tp_pkts = SYS_SLIST_STATIC_INIT(&tp_pkts);
 static sys_slist_t tp_q = SYS_SLIST_STATIC_INIT(&tp_q);
 
 static void tcp_in(struct tcp *conn, struct net_pkt *pkt);
@@ -370,9 +370,9 @@ static void tp_nbstat(void)
 
 void tp_npstat(void)
 {
-	struct tp_npkt *pkt;
+	struct tp_pkt *pkt;
 
-	SYS_SLIST_FOR_EACH_CONTAINER(&tp_npkts, pkt, next) {
+	SYS_SLIST_FOR_EACH_CONTAINER(&tp_pkts, pkt, next) {
 		tcp_dbg("%s:%d %p", pkt->file, pkt->line, pkt->pkt);
 	}
 }
@@ -380,15 +380,15 @@ void tp_npstat(void)
 static struct net_pkt *tp_pkt_alloc(size_t len, const char *file, int line)
 {
 	struct net_pkt *pkt = net_pkt_get(len);
-	struct tp_npkt *tp_npkt = k_malloc(sizeof(struct tp_npkt));
+	struct tp_pkt *tp_pkt = k_malloc(sizeof(struct tp_pkt));
 
-	tcp_assert(tp_npkt, "");
+	tcp_assert(tp_pkt, "");
 
-	tp_npkt->pkt = pkt;
-	tp_npkt->file = file;
-	tp_npkt->line = line;
+	tp_pkt->pkt = pkt;
+	tp_pkt->file = file;
+	tp_pkt->line = line;
 
-	sys_slist_append(&tp_npkts, (sys_snode_t *) tp_npkt);
+	sys_slist_append(&tp_pkts, (sys_snode_t *) tp_pkt);
 
 	return pkt;
 }
@@ -396,15 +396,15 @@ static struct net_pkt *tp_pkt_alloc(size_t len, const char *file, int line)
 static struct net_pkt *tp_pkt_clone(struct net_pkt *pkt, const char *file,
 					int line)
 {
-	struct tp_npkt *tp_npkt = k_malloc(sizeof(struct tp_npkt));
+	struct tp_pkt *tp_pkt = k_malloc(sizeof(struct tp_pkt));
 
 	pkt = net_pkt_clone(pkt, K_NO_WAIT);
 
-	tp_npkt->pkt = pkt;
-	tp_npkt->file = file;
-	tp_npkt->line = line;
+	tp_pkt->pkt = pkt;
+	tp_pkt->file = file;
+	tp_pkt->line = line;
 
-	sys_slist_append(&tp_npkts, (sys_snode_t *) tp_npkt);
+	sys_slist_append(&tp_pkts, (sys_snode_t *) tp_pkt);
 
 	return pkt;
 }
@@ -412,10 +412,10 @@ static struct net_pkt *tp_pkt_clone(struct net_pkt *pkt, const char *file,
 static void tp_pkt_unref(struct net_pkt *pkt, const char *file, int line)
 {
 	bool found = false;
-	struct tp_npkt *tp_npkt;
+	struct tp_pkt *tp_pkt;
 
-	SYS_SLIST_FOR_EACH_CONTAINER(&tp_npkts, tp_npkt, next) {
-		if (tp_npkt->pkt == pkt) {
+	SYS_SLIST_FOR_EACH_CONTAINER(&tp_pkts, tp_pkt, next) {
+		if (tp_pkt->pkt == pkt) {
 			found = true;
 			break;
 		}
@@ -423,11 +423,11 @@ static void tp_pkt_unref(struct net_pkt *pkt, const char *file, int line)
 
 	tcp_assert(found, "Invalid tp_pkt_unref(%p): %s:%d", pkt, file, line);
 
-	sys_slist_find_and_remove(&tp_npkts, (sys_snode_t *) tp_npkt);
+	sys_slist_find_and_remove(&tp_pkts, (sys_snode_t *) tp_pkt);
 
-	net_pkt_unref(tp_npkt->pkt);
+	net_pkt_unref(tp_pkt->pkt);
 
-	k_free(tp_npkt);
+	k_free(tp_pkt);
 }
 
 #if 1
