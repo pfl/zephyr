@@ -378,7 +378,7 @@ void tp_npstat(void)
 	}
 }
 
-static struct net_pkt *tp_npkt_alloc(size_t len, char *file, int line)
+static struct net_pkt *tp_pkt_alloc(size_t len, const char *file, int line)
 {
 	struct net_pkt *pkt = net_pkt_get(len);
 	struct tp_npkt *tp_npkt = k_malloc(sizeof(struct tp_npkt));
@@ -386,7 +386,7 @@ static struct net_pkt *tp_npkt_alloc(size_t len, char *file, int line)
 	tcp_assert(tp_npkt, "");
 
 	tp_npkt->pkt = pkt;
-	tp_npkt->file = basename(file);
+	tp_npkt->file = file;
 	tp_npkt->line = line;
 
 	sys_slist_append(&tp_npkts, (sys_snode_t *) tp_npkt);
@@ -394,14 +394,15 @@ static struct net_pkt *tp_npkt_alloc(size_t len, char *file, int line)
 	return pkt;
 }
 
-static struct net_pkt *tp_npkt_clone(struct net_pkt *pkt, char *file, int line)
+static struct net_pkt *tp_pkt_clone(struct net_pkt *pkt, const char *file,
+					int line)
 {
 	struct tp_npkt *tp_npkt = k_malloc(sizeof(struct tp_npkt));
 
 	pkt = net_pkt_clone(pkt, K_NO_WAIT);
 
 	tp_npkt->pkt = pkt;
-	tp_npkt->file = basename(file);
+	tp_npkt->file = file;
 	tp_npkt->line = line;
 
 	sys_slist_append(&tp_npkts, (sys_snode_t *) tp_npkt);
@@ -409,7 +410,7 @@ static struct net_pkt *tp_npkt_clone(struct net_pkt *pkt, char *file, int line)
 	return pkt;
 }
 
-static void tp_npkt_unref(struct net_pkt *pkt)
+static void tp_pkt_unref(struct net_pkt *pkt, const char *file, int line)
 {
 	bool found = false;
 	struct tp_npkt *tp_npkt;
@@ -421,7 +422,7 @@ static void tp_npkt_unref(struct net_pkt *pkt)
 		}
 	}
 
-	tcp_assert(found, "Invalid tp_npkt_unref()");
+	tcp_assert(found, "Invalid tp_pkt_unref(%p): %s:%d", pkt, file, line);
 
 	sys_slist_find_and_remove(&tp_npkts, (sys_snode_t *) tp_npkt);
 
@@ -431,9 +432,9 @@ static void tp_npkt_unref(struct net_pkt *pkt)
 }
 
 #if 1
-#define tcp_pkt_alloc(_len) tp_npkt_alloc(_len, __FILE__, __LINE__)
-#define tcp_pkt_clone(_pkt) tp_npkt_clone(_pkt, __FILE__, __LINE__)
-#define tcp_pkt_unref(_pkt) tp_npkt_unref(_pkt)
+#define tcp_pkt_alloc(_len) tp_pkt_alloc(_len, basename(__FILE__), __LINE__)
+#define tcp_pkt_clone(_pkt) tp_pkt_clone(_pkt, basename(__FILE__), __LINE__)
+#define tcp_pkt_unref(_pkt) tp_pkt_unref(_pkt, basename(__FILE__), __LINE__)
 #endif
 
 #if 0
