@@ -548,12 +548,26 @@ static struct tcp *tcp_conn_search(struct net_pkt *pkt)
 	return found ? conn : NULL;
 }
 
+static void tcp_retransmissions_flush(struct tcp *conn)
+{
+	sys_snode_t *node;
+	struct net_pkt *pkt;
+
+	if (sys_slist_is_empty(&conn->retr) == false) {
+		k_timer_stop(&conn->timer);
+	}
+
+	while ((node = sys_slist_get(&conn->retr))) {
+		pkt = CONTAINER_OF(node, struct net_pkt, next);
+		tcp_pkt_unref(pkt);
+	}
+}
+
 static void tcp_conn_delete(struct tcp *conn)
 {
 	tcp_dbg("");
 
-	tcp_assert(sys_slist_is_empty(&conn->retr),
-			"Retransmission queue isn't empty");
+	tcp_retransmissions_flush(conn);
 
 	tcp_win_free(conn->snd);
 	tcp_win_free(conn->rcv);
@@ -1351,10 +1365,6 @@ static void tcp_retransmit(struct k_timer *timer)
 
 		conn->retries--;
 	} else {
-		while ((node = sys_slist_get(&conn->retr))) {
-			pkt = CONTAINER_OF(node, struct net_pkt, next);
-			tcp_pkt_unref(pkt);
-		}
 		tcp_conn_delete(conn);
 	}
 }
