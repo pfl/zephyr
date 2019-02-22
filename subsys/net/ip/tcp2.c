@@ -240,6 +240,7 @@ static sys_slist_t tp_q = SYS_SLIST_STATIC_INIT(&tp_q);
 
 static void tcp_in(struct tcp *conn, struct net_pkt *pkt);
 static void tcp_out(struct tcp *conn, u8_t th_flags);
+static void tcp_add_to_retransmit(struct tcp *conn, struct net_pkt *pkt);
 static void tcp_retransmit(struct k_timer *timer);
 static void tcp_timer_cancel(struct tcp *conn);
 static struct tcp_win *tcp_win_new(const char *name);
@@ -921,8 +922,13 @@ static struct net_pkt *tp_make(void)
 	return pkt;
 }
 
-static void tcp_pkt_send(struct net_pkt *pkt)
+static void tcp_pkt_send(struct tcp *conn, struct net_pkt *pkt, bool retransmit)
 {
+	if (retransmit) {
+		tcp_assert(conn, "Invalid retransmit request");
+		tcp_add_to_retransmit(conn, tcp_pkt_clone(pkt));
+	}
+
 	net_pkt_ref(pkt);
 
 	if (net_send_data(pkt) < 0) {
@@ -943,7 +949,7 @@ static void tp_output(struct net_if *iface, void *data, size_t data_len)
 
 	pkt->iface = iface;
 
-	tcp_pkt_send(pkt);
+	tcp_pkt_send(NULL, pkt, false);
 }
 
 static void tcp_step(void)
@@ -1332,7 +1338,7 @@ static void tcp_retransmit(struct k_timer *timer)
 
 	tcp_dbg("%s", tcp_th(conn, pkt));
 
-	tcp_pkt_send(tcp_pkt_clone(pkt));
+	tcp_pkt_send(conn, tcp_pkt_clone(pkt), false);
 
 	tcp_timer_subscribe(conn, pkt);
 }
@@ -1385,11 +1391,7 @@ static void tcp_out(struct tcp *conn, u8_t th_flags)
 
 	tcp_csum(pkt);
 
-	if (th_flags & TH_SYN) {
-		tcp_add_to_retransmit(conn, tcp_pkt_clone(pkt));
-	}
-
-	tcp_pkt_send(pkt);
+	tcp_pkt_send(conn, pkt, th_flags & TH_SYN);
 }
 
 static bool tp_tap_input(struct net_pkt *pkt)
