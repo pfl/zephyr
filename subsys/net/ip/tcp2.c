@@ -430,15 +430,15 @@ static void tp_npkt_unref(struct net_pkt *pkt)
 }
 
 #if 1
-#define tcp_npkt_alloc(_len) tp_npkt_alloc(_len, __FILE__, __LINE__)
-#define tcp_npkt_clone(_pkt) tp_npkt_clone(_pkt, __FILE__, __LINE__)
-#define tcp_npkt_unref(_pkt) tp_npkt_unref(_pkt)
+#define tcp_pkt_alloc(_len) tp_npkt_alloc(_len, __FILE__, __LINE__)
+#define tcp_pkt_clone(_pkt) tp_npkt_clone(_pkt, __FILE__, __LINE__)
+#define tcp_pkt_unref(_pkt) tp_npkt_unref(_pkt)
 #endif
 
 #if 0
-#define tcp_npkt_alloc(_len) net_pkt_get(_len)
-#define tcp_npkt_clone(_pkt) net_pkt_clone(_pkt, K_NO_WAIT)
-#define tcp_npkt_unref(_pkt) net_pkt_unref(_pkt)
+#define tcp_pkt_alloc(_len) net_pkt_get(_len)
+#define tcp_pkt_clone(_pkt) net_pkt_clone(_pkt, K_NO_WAIT)
+#define tcp_pkt_unref(_pkt) net_pkt_unref(_pkt)
 #endif
 
 static struct sockaddr *sockaddr_new(struct net_pkt *pkt, int which)
@@ -899,7 +899,7 @@ out:
 
 static struct net_pkt *tp_make(void)
 {
-	struct net_pkt *pkt = tcp_npkt_alloc(sizeof(struct net_ipv4_hdr) +
+	struct net_pkt *pkt = tcp_pkt_alloc(sizeof(struct net_ipv4_hdr) +
 					sizeof(struct net_udp_hdr));
 	struct net_ipv4_hdr *ip = (void *) net_pkt_ip_data(pkt);
 	struct net_udp_hdr *uh = (void *) (ip + 1);
@@ -927,10 +927,10 @@ static void net_pkt_send(struct net_pkt *pkt)
 
 	if (net_send_data(pkt) < 0) {
 		tcp_err("net_send_data()");
-		tcp_npkt_unref(pkt);
+		tcp_pkt_unref(pkt);
 	}
 
-	tcp_npkt_unref(pkt);
+	tcp_pkt_unref(pkt);
 }
 
 static void tp_output(struct net_if *iface, void *data, size_t data_len)
@@ -1245,7 +1245,7 @@ void tp_input(struct net_pkt *pkt) { return; }
 
 static struct net_pkt *tcp_make(struct tcp *conn, u8_t th_flags)
 {
-	struct net_pkt *pkt = tcp_npkt_alloc(sizeof(struct net_ipv4_hdr) +
+	struct net_pkt *pkt = tcp_pkt_alloc(sizeof(struct net_ipv4_hdr) +
 						sizeof(struct tcphdr));
 	struct net_ipv4_hdr *ip = (void *) net_pkt_ip_data(pkt);
 	struct tcphdr *th = (void *) (ip + 1);
@@ -1332,7 +1332,7 @@ static void tcp_retransmit(struct k_timer *timer)
 
 	tcp_dbg("%s", tcp_th(conn, pkt));
 
-	net_pkt_send(tcp_npkt_clone(pkt));
+	net_pkt_send(tcp_pkt_clone(pkt));
 
 	tcp_timer_subscribe(conn, pkt);
 }
@@ -1349,7 +1349,7 @@ static void tcp_timer_cancel(struct tcp *conn)
 
 	tcp_dbg("%s", pkt ? tcp_th(conn, pkt) : "");
 
-	tcp_npkt_unref(pkt);
+	tcp_pkt_unref(pkt);
 }
 
 static void tcp_add_to_retransmit(struct tcp *conn, struct net_pkt *pkt)
@@ -1386,7 +1386,7 @@ static void tcp_out(struct tcp *conn, u8_t th_flags)
 	tcp_csum(pkt);
 
 	if (th_flags & TH_SYN) {
-		tcp_add_to_retransmit(conn, tcp_npkt_clone(pkt));
+		tcp_add_to_retransmit(conn, tcp_pkt_clone(pkt));
 	}
 
 	net_pkt_send(pkt);
