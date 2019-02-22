@@ -240,7 +240,7 @@ static sys_slist_t tp_q = SYS_SLIST_STATIC_INIT(&tp_q);
 
 static void tcp_in(struct tcp *conn, struct net_pkt *pkt);
 static void tcp_out(struct tcp *conn, u8_t th_flags);
-static void tcp_timer_cb(struct k_timer *timer);
+static void tcp_retransmit(struct k_timer *timer);
 static void tcp_timer_cancel(struct tcp *conn);
 static struct tcp_win *tcp_win_new(const char *name);
 static void tcp_win_free(struct tcp_win *win);
@@ -485,7 +485,7 @@ static struct tcp *tcp_conn_new(struct net_pkt *pkt)
 	conn->snd = tcp_win_new("SND");
 
 	sys_slist_init(&conn->retr);
-	k_timer_init(&conn->timer, tcp_timer_cb, NULL);
+	k_timer_init(&conn->timer, tcp_retransmit, NULL);
 
 	sys_slist_append(&tcp_conns, (sys_snode_t *) conn);
 	tcp_in(conn, NULL);
@@ -1312,23 +1312,29 @@ static void tcp_csum(struct net_pkt *pkt)
 	th->th_sum = cs(s);
 }
 
-static void tcp_timer_cb(struct k_timer *timer)
+static void tcp_timer_subscribe(struct tcp *conn, struct net_pkt *pkt)
 {
-	struct tcp *conn = k_timer_user_data_get(timer);
-	struct net_pkt *pkt = (void *) sys_slist_peek_head(&conn->retr);
-
-	pkt = CONTAINER_OF(pkt, struct net_pkt, next);
-
-	tcp_assert(pkt, "No packet in the retransmission queue");
-
-	pkt = tcp_npkt_clone(pkt);
-
-	tcp_dbg("%s", pkt ? tcp_th(conn, pkt) : "");
-
-	net_pkt_send(pkt);
+	tcp_dbg("%s", tcp_th(conn, pkt));
 
 	k_timer_user_data_set(&conn->timer, conn);
+
 	k_timer_start(&conn->timer, K_MSEC(tcp_rto), 0);
+}
+
+static void tcp_retransmit(struct k_timer *timer)
+{
+	struct tcp *conn = k_timer_user_data_get(timer);
+	sys_snode_t *node =  sys_slist_peek_head(&conn->retr);
+	struct net_pkt *pkt = node ?
+		CONTAINER_OF(node, struct net_pkt, next) : NULL;
+
+	tcp_assert(pkt, "Empty retransmission queue");
+
+	tcp_dbg("%s", tcp_th(conn, pkt));
+
+	net_pkt_send(tcp_npkt_clone(pkt));
+
+	tcp_timer_subscribe(conn, pkt);
 }
 
 static void tcp_timer_cancel(struct tcp *conn)
@@ -1346,17 +1352,17 @@ static void tcp_timer_cancel(struct tcp *conn)
 	tcp_npkt_unref(pkt);
 }
 
-static void tcp_timer_subscribe(struct tcp *conn, struct net_pkt *pkt)
+static void tcp_add_to_retransmit(struct tcp *conn, struct net_pkt *pkt)
 {
-	pkt = tcp_npkt_clone(pkt);
+	bool subscribe = sys_slist_is_empty(&conn->retr);
 
 	tcp_dbg("%s", tcp_th(conn, pkt));
 
 	sys_slist_append(&conn->retr, &pkt->next);
 
-	k_timer_user_data_set(&conn->timer, conn);
-
-	k_timer_start(&conn->timer, K_MSEC(tcp_rto), 0);
+	if (subscribe) {
+		tcp_timer_subscribe(conn, pkt);
+	}
 }
 
 static void tcp_out(struct tcp *conn, u8_t th_flags)
@@ -1380,10 +1386,8 @@ static void tcp_out(struct tcp *conn, u8_t th_flags)
 	tcp_csum(pkt);
 
 	if (th_flags & TH_SYN) {
-		tcp_timer_subscribe(conn, pkt);
+		tcp_add_to_retransmit(conn, tcp_npkt_clone(pkt));
 	}
-
-	tcp_dbg("%s", tcp_th(conn, pkt));
 
 	net_pkt_send(pkt);
 }
