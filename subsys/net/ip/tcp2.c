@@ -226,6 +226,7 @@ struct tp_npkt {
 	int line;
 };
 
+static int tcp_rto = 500; /* Retransmission timeout, msec */
 static sys_slist_t tcp_conns = SYS_SLIST_STATIC_INIT(&tcp_conns);
 
 static bool tp_enabled = IS_ENABLED(CONFIG_NET_TP);
@@ -1215,6 +1216,7 @@ void tp_input(struct net_pkt *pkt)
 		}
 		break;
 	case TP_CONFIG_REQUEST:
+		tp_new_find_and_apply(tp_new, "tcp_rto", &tcp_rto, TP_INT);
 		tp_new_find_and_apply(tp_new, "tcp_echo", &tp_tcp_echo,
 					TP_BOOL);
 		break;
@@ -1325,7 +1327,7 @@ static void tcp_timer_cb(struct k_timer *timer)
 	net_pkt_send(pkt);
 
 	k_timer_user_data_set(&conn->timer, conn);
-	k_timer_start(&conn->timer, K_MSEC(50), 0);
+	k_timer_start(&conn->timer, K_MSEC(tcp_rto), 0);
 }
 
 static void tcp_timer_cancel(struct tcp *conn)
@@ -1353,7 +1355,7 @@ static void tcp_timer_subscribe(struct tcp *conn, struct net_pkt *pkt)
 
 	k_timer_user_data_set(&conn->timer, conn);
 
-	k_timer_start(&conn->timer, K_MSEC(500), 0);
+	k_timer_start(&conn->timer, K_MSEC(tcp_rto), 0);
 }
 
 static void tcp_out(struct tcp *conn, u8_t th_flags)
