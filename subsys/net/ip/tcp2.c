@@ -920,7 +920,7 @@ static struct net_pkt *tp_make(void)
 	return pkt;
 }
 
-static void net_pkt_send(struct net_pkt *pkt)
+static void tcp_pkt_send(struct net_pkt *pkt)
 {
 	net_pkt_ref(pkt);
 
@@ -942,7 +942,7 @@ static void tp_output(struct net_if *iface, void *data, size_t data_len)
 
 	pkt->iface = iface;
 
-	net_pkt_send(pkt);
+	tcp_pkt_send(pkt);
 }
 
 static void tcp_step(void)
@@ -1331,7 +1331,7 @@ static void tcp_retransmit(struct k_timer *timer)
 
 	tcp_dbg("%s", tcp_th(conn, pkt));
 
-	net_pkt_send(tcp_pkt_clone(pkt));
+	tcp_pkt_send(tcp_pkt_clone(pkt));
 
 	tcp_timer_subscribe(conn, pkt);
 }
@@ -1388,7 +1388,7 @@ static void tcp_out(struct tcp *conn, u8_t th_flags)
 		tcp_add_to_retransmit(conn, tcp_pkt_clone(pkt));
 	}
 
-	net_pkt_send(pkt);
+	tcp_pkt_send(pkt);
 }
 
 static bool tp_tap_input(struct net_pkt *pkt)
