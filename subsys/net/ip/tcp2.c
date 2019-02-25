@@ -98,6 +98,15 @@ LOG_MODULE_REGISTER(net_tcp2);
 #define tcp_nbuf_unref(_nbuf) \
 	tp_nbuf_unref(_nbuf, basename(__FILE__), __LINE__, __func__)
 
+#define TP_SEQ 0
+#define TP_ACK 1
+
+#define conn_seq(_pval, _req) \
+	tp_seq_track(TP_SEQ, _pval, _req, basename(__FILE__), __LINE__, \
+			__func__)
+#define conn_ack(_pval, _req) \
+	tp_seq_track(TP_ACK, _pval, _req, basename(__FILE__), __LINE__, \
+			__func__)
 struct tcphdr {
 	u16_t th_sport;
 	u16_t th_dport;
@@ -279,9 +288,6 @@ static const char *basename(const char *path)
 	return file;
 }
 
-#define TP_SEQ 0
-#define TP_ACK 1
-
 static u32_t tp_seq_track(int kind, u32_t *pvalue, int req,
 				const char *file, int line, const char *func)
 {
@@ -306,13 +312,6 @@ static u32_t tp_seq_track(int kind, u32_t *pvalue, int req,
 
 	return seq->value;
 }
-
-#define conn_seq(_pval, _req) \
-	tp_seq_track(TP_SEQ, _pval, _req, basename(__FILE__), __LINE__, \
-			__func__)
-#define conn_ack(_pval, _req) \
-	tp_seq_track(TP_ACK, _pval, _req, basename(__FILE__), __LINE__, \
-			__func__)
 
 void tp_seq_stat(void)
 {
