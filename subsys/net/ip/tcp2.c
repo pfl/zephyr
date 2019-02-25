@@ -267,7 +267,7 @@ static const char *basename(const char *path)
 	return file;
 }
 
-void tp_mstat(void)
+void tp_mem_stat(void)
 {
 	struct tp_mem *mem;
 
@@ -371,7 +371,7 @@ static void tp_nbstat(void)
 	}
 }
 
-void tp_npstat(void)
+void tp_pkt_stat(void)
 {
 	struct tp_pkt *pkt;
 
@@ -1232,9 +1232,9 @@ void tp_input(struct net_pkt *pkt)
 		}
 		if (is("CLOSE", tp->op)) {
 			tcp_conn_delete(tcp_conn_search(pkt));
-			tp_mstat();
+			tp_mem_stat();
 			tp_nbstat();
-			tp_npstat();
+			tp_pkt_stat();
 		}
 		if (is("RECV", tp->op)) {
 			tcp_dbg("rcv=%zd", tcp_recv(0, NULL, 0, 0));
