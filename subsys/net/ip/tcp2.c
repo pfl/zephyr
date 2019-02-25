@@ -102,6 +102,10 @@ LOG_MODULE_REGISTER(net_tcp2);
 #define tcp_nbuf_unref(_nbuf) \
 	tp_nbuf_unref(_nbuf, basename(__FILE__), __LINE__, __func__)
 
+#define tcp_pkt_alloc(_len) tp_pkt_alloc(_len, basename(__FILE__), __LINE__)
+#define tcp_pkt_clone(_pkt) tp_pkt_clone(_pkt, basename(__FILE__), __LINE__)
+#define tcp_pkt_unref(_pkt) tp_pkt_unref(_pkt, basename(__FILE__), __LINE__)
+
 #define TP_SEQ 0
 #define TP_ACK 1
 
@@ -491,18 +495,6 @@ static void tp_pkt_unref(struct net_pkt *pkt, const char *file, int line)
 
 	k_free(tp_pkt);
 }
-
-#if 1
-#define tcp_pkt_alloc(_len) tp_pkt_alloc(_len, basename(__FILE__), __LINE__)
-#define tcp_pkt_clone(_pkt) tp_pkt_clone(_pkt, basename(__FILE__), __LINE__)
-#define tcp_pkt_unref(_pkt) tp_pkt_unref(_pkt, basename(__FILE__), __LINE__)
-#endif
-
-#if 0
-#define tcp_pkt_alloc(_len) net_pkt_get(_len)
-#define tcp_pkt_clone(_pkt) net_pkt_clone(_pkt, K_NO_WAIT)
-#define tcp_pkt_unref(_pkt) net_pkt_unref(_pkt)
-#endif
 
 static struct sockaddr *sockaddr_new(struct net_pkt *pkt, int which)
 {
