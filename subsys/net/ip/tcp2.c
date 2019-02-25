@@ -206,6 +206,16 @@ struct tp {
 	const char *op;
 };
 
+struct tp_seq {
+	sys_snode_t next;
+	const char *file;
+	int line;
+	const char *func;
+	int kind;
+	u32_t value;
+	u32_t old_value;
+};
+
 struct tp_mem {
 	sys_snode_t next;
 	const char *file;
@@ -237,6 +247,7 @@ static bool tp_enabled = IS_ENABLED(CONFIG_NET_TP);
 static enum tp_type tp_state;
 static bool tp_tcp_echo;
 static sys_slist_t tp_mem = SYS_SLIST_STATIC_INIT(&tp_mem);
+static sys_slist_t tp_seq = SYS_SLIST_STATIC_INIT(&tp_mem);
 static sys_slist_t tp_nbufs = SYS_SLIST_STATIC_INIT(&tp_nbufs);
 static sys_slist_t tp_pkts = SYS_SLIST_STATIC_INIT(&tp_pkts);
 static sys_slist_t tp_q = SYS_SLIST_STATIC_INIT(&tp_q);
@@ -266,6 +277,54 @@ static const char *basename(const char *path)
 	}
 
 	return file;
+}
+
+#define TP_SEQ 0
+#define TP_ACK 1
+
+static u32_t tp_seq_track(int kind, u32_t *pvalue, int req,
+				const char *file, int line, const char *func)
+{
+	struct tp_seq *seq = k_malloc(sizeof(struct tp_seq));
+
+	seq->kind = kind;
+	seq->file = file;
+	seq->line = line;
+	seq->func = func;
+
+	seq->old_value = *pvalue;
+
+	*pvalue = *pvalue + req;
+
+	seq->value = *pvalue;
+
+	sys_slist_append(&tp_seq, (sys_snode_t *) seq);
+
+	tcp_dbg("%s %u->%u %s:%d %s()", seq->kind == TP_SEQ ? "SEQ" : "ACK",
+		seq->old_value, seq->value,
+		seq->file, seq->line, seq->func);
+
+	return seq->value;
+}
+
+#define conn_seq(_pval, _req) \
+	tp_seq_track(TP_SEQ, _pval, _req, basename(__FILE__), __LINE__, \
+			__func__)
+#define conn_ack(_pval, _req) \
+	tp_seq_track(TP_ACK, _pval, _req, basename(__FILE__), __LINE__, \
+			__func__)
+
+void tp_seq_stat(void)
+{
+	struct tp_seq *seq;
+
+	while ((seq = (struct tp_seq *) sys_slist_get(&tp_seq))) {
+		tcp_dbg("%s %u->%u %s:%d %s()",
+			seq->kind == TP_SEQ ? "SEQ" : "ACK",
+			seq->old_value, seq->value,
+			seq->file, seq->line, seq->func);
+		k_free(seq);
+	}
 }
 
 void tp_mem_stat(void)
@@ -729,7 +788,7 @@ next_state:
 		/* TODO: next 4 lines into one op */
 		if (conn->kind == TCP_ACTIVE) {
 			tcp_out(conn, TH_SYN);
-			conn->seq++;
+			conn_seq(&conn->seq, +1);
 			next = TCP_SYN_SENT;
 		}
 		if (th && th->th_flags == TH_SYN) {
@@ -738,9 +797,9 @@ next_state:
 		}
 		break;
 	case TCP_SYN_RECEIVED:
-		conn->ack++;
+		conn_ack(&conn->ack, +1);
 		tcp_out(conn, TH_SYN | TH_ACK);
-		conn->seq++;
+		conn_seq(&conn->seq, +1);
 		next = TCP_SYN_SENT;
 		break;
 	case TCP_SYN_SENT:
@@ -754,7 +813,7 @@ next_state:
 		if (th && th->th_flags == (TH_SYN | TH_ACK) &&
 				th_ack(th) == conn->seq) { /* active open */
 			tcp_timer_cancel(conn);
-			conn->ack = th_seq(th) + 1;
+			conn_ack(&conn->ack, th_seq(th) + 1);
 			tcp_out(conn, TH_ACK);
 			next = TCP_ESTABLISHED;
 		}
@@ -767,11 +826,11 @@ next_state:
 		if (!th && !sys_slist_is_empty(&conn->snd->nbufs)) {
 			size_t data_len = conn->snd->len;
 			tcp_out(conn, TH_PSH);
-			conn->seq += data_len;
+			conn_seq(&conn->seq, +data_len);
 		}
 		if (th && th->th_flags == (TH_ACK | TH_FIN)
 				&& th_seq(th) == conn->ack) { /* full-close */
-			conn->ack++;
+			conn_ack(&conn->ack, +1);
 			tcp_out(conn, TH_ACK);/* TODO: this could be optional */
 			next = TCP_CLOSE_WAIT;
 			break;
@@ -801,7 +860,7 @@ next_state:
 			tcp_win_push(conn->rcv, data, data_len);
 			tcp_win_push(conn->snd, data, data_len);
 
-			conn->ack += data_len;
+			conn_ack(&conn->ack, +data_len);
 			tcp_out(conn, TH_ACK); /* ack the data */
 
 			if (tp_tcp_echo) {
@@ -809,7 +868,7 @@ next_state:
 				 * switch() */
 				data_len = conn->snd->len;
 				tcp_out(conn, TH_PSH); /* echo the input */
-				conn->seq += data_len;
+				conn_seq(&conn->seq, +data_len);
 			}
 		}
 		if (th && th->th_flags == TH_ACK && th_seq(th) == conn->ack) {
@@ -1236,6 +1295,7 @@ void tp_input(struct net_pkt *pkt)
 			tp_mem_stat();
 			tp_nbstat();
 			tp_pkt_stat();
+			tp_seq_stat();
 		}
 		if (is("RECV", tp->op)) {
 			tcp_dbg("rcv=%zd", tcp_recv(0, NULL, 0, 0));
