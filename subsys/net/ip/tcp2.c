@@ -90,6 +90,11 @@ LOG_MODULE_REGISTER(net_tcp2);
 #define ip_get(_x) ((struct net_ipv4_hdr *) net_pkt_ip_data((_x)))
 #define th_get(_x) ((struct tcphdr *) (ip_get(_x) + 1))
 
+#define tcp_malloc(_size) tp_malloc(_size, basename(__FILE__), __LINE__)
+#define tcp_calloc(_nmemb, _size) \
+	tp_calloc(_nmemb, _size, basename(__FILE__), __LINE__)
+#define tcp_free(_ptr) tp_free(_ptr, basename(__FILE__), __LINE__, __func__)
+
 #define PKT_DST 0
 #define PKT_SRC 1
 
@@ -331,36 +336,36 @@ void tp_mem_stat(void)
 	struct tp_mem *mem;
 
 	SYS_SLIST_FOR_EACH_CONTAINER(&tp_mem, mem, next) {
-		tcp_dbg("len=%zu %s:%d", mem->size,
-			basename(mem->file), mem->line);
+		tcp_dbg("len=%zu %s:%d", mem->size, mem->file, mem->line);
 	}
 }
 
-void *tp_malloc(size_t size, char *file, int line)
+void *tp_malloc(size_t size, const char *file, int line)
 {
-	struct tp_mem *m = k_malloc(sizeof(struct tp_mem) + size);
+	struct tp_mem *mem = k_malloc(sizeof(struct tp_mem) + size);
 
-	m->size = size;
-	m->file = basename(file);
-	m->line = line;
+	mem->size = size;
+	mem->file = file;
+	mem->line = line;
 
-	sys_slist_append(&tp_mem, (sys_snode_t *) m);
+	sys_slist_append(&tp_mem, (sys_snode_t *) mem);
 
-	return &m->mem;
+	return &mem->mem;
 }
 
-void tp_free(void *ptr)
+void tp_free(void *ptr, const char *file, int line, const char *func)
 {
-	struct tp_mem *m = (void *)((u8_t *) ptr - sizeof(struct tp_mem));
+	struct tp_mem *mem = (void *)((u8_t *) ptr - sizeof(struct tp_mem));
 
-	if (!sys_slist_find_and_remove(&tp_mem, (sys_snode_t *) m)) {
-		tcp_assert(false, "Invalid free()");
+	if (!sys_slist_find_and_remove(&tp_mem, (sys_snode_t *) mem)) {
+		tcp_assert(false, "%s:%d %s() Invalid free(%p)",
+				file, line, func, ptr);
 	}
 
-	k_free(m);
+	k_free(mem);
 }
 
-void *tp_calloc(size_t nmemb, size_t size, char *file, int line)
+void *tp_calloc(size_t nmemb, size_t size, const char *file, int line)
 {
 	size *= nmemb;
 
@@ -370,10 +375,6 @@ void *tp_calloc(size_t nmemb, size_t size, char *file, int line)
 
 	return ptr;
 }
-
-#define tcp_malloc(_size) tp_malloc(_size, __FILE__, __LINE__)
-#define tcp_calloc(_nmemb, _size) tp_calloc(_nmemb, _size, __FILE__, __LINE__)
-#define tcp_free(_ptr) tp_free(_ptr)
 
 static struct net_buf *tp_nbuf_alloc(size_t len, const char *file, int line,
 					const char *func)
@@ -420,7 +421,7 @@ static void tp_nbuf_unref(struct net_buf *nbuf, const char *file, int line,
 	k_free(tp_nbuf);
 }
 
-static void tp_nbstat(void)
+static void tp_nbuf_stat(void)
 {
 	struct tp_nbuf *tp_nbuf;
 
@@ -1292,7 +1293,7 @@ void tp_input(struct net_pkt *pkt)
 		if (is("CLOSE", tp->op)) {
 			tcp_conn_delete(tcp_conn_search(pkt));
 			tp_mem_stat();
-			tp_nbstat();
+			tp_nbuf_stat();
 			tp_pkt_stat();
 			tp_seq_stat();
 		}
