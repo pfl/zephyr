@@ -1294,8 +1294,6 @@ void tp_input(struct net_pkt *pkt)
 	data_len += 1;
 
 	switch (type) {
-	case TP_NONE:
-		break;
 	case TP_CONFIG_REQUEST:
 		tp_new = json_to_tp_new(buf, data_len);
 		break;
@@ -1357,7 +1355,7 @@ void tp_input(struct net_pkt *pkt)
 	}
 }
 #else
-void tp_input(struct net_pkt *pkt) { return; }
+void tp_input(struct net_pkt *pkt) { }
 #endif
 
 static struct net_pkt *tcp_make(struct tcp *conn, u8_t th_flags)
