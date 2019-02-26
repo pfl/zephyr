@@ -109,12 +109,12 @@ LOG_MODULE_REGISTER(net_tcp2);
 #define TP_SEQ 0
 #define TP_ACK 1
 
-#define conn_seq(_pval, _req) \
-	tp_seq_track(TP_SEQ, _pval, _req, basename(__FILE__), __LINE__, \
-			__func__)
-#define conn_ack(_pval, _req) \
-	tp_seq_track(TP_ACK, _pval, _req, basename(__FILE__), __LINE__, \
-			__func__)
+#define conn_seq(_conn, _req) \
+	tp_seq_track(TP_SEQ, &(_conn)->seq, (_req), basename(__FILE__), \
+			__LINE__, __func__)
+#define conn_ack(_conn, _req) \
+	tp_seq_track(TP_ACK, &(_conn)->ack, (_req), basename(__FILE__), \
+			__LINE__, __func__)
 struct tcphdr {
 	u16_t th_sport;
 	u16_t th_dport;
@@ -779,7 +779,7 @@ next_state:
 		/* TODO: next 4 lines into one op */
 		if (conn->kind == TCP_ACTIVE) {
 			tcp_out(conn, TH_SYN);
-			conn_seq(&conn->seq, +1);
+			conn_seq(conn, +1);
 			next = TCP_SYN_SENT;
 		}
 		if (th && th->th_flags == TH_SYN) {
@@ -788,9 +788,9 @@ next_state:
 		}
 		break;
 	case TCP_SYN_RECEIVED:
-		conn_ack(&conn->ack, +1);
+		conn_ack(conn, +1);
 		tcp_out(conn, TH_SYN | TH_ACK);
-		conn_seq(&conn->seq, +1);
+		conn_seq(conn, +1);
 		next = TCP_SYN_SENT;
 		break;
 	case TCP_SYN_SENT:
@@ -804,7 +804,7 @@ next_state:
 		if (th && th->th_flags == (TH_SYN | TH_ACK) &&
 				th_ack(th) == conn->seq) { /* active open */
 			tcp_timer_cancel(conn);
-			conn_ack(&conn->ack, th_seq(th) + 1);
+			conn_ack(conn, th_seq(th) + 1);
 			tcp_out(conn, TH_ACK);
 			next = TCP_ESTABLISHED;
 		}
@@ -817,11 +817,11 @@ next_state:
 		if (!th && !sys_slist_is_empty(&conn->snd->nbufs)) {
 			size_t data_len = conn->snd->len;
 			tcp_out(conn, TH_PSH);
-			conn_seq(&conn->seq, +data_len);
+			conn_seq(conn, +data_len);
 		}
 		if (th && th->th_flags == (TH_ACK | TH_FIN)
 				&& th_seq(th) == conn->ack) { /* full-close */
-			conn_ack(&conn->ack, +1);
+			conn_ack(conn, +1);
 			tcp_out(conn, TH_ACK);/* TODO: this could be optional */
 			next = TCP_CLOSE_WAIT;
 			break;
@@ -851,7 +851,7 @@ next_state:
 			tcp_win_push(conn->rcv, data, data_len);
 			tcp_win_push(conn->snd, data, data_len);
 
-			conn_ack(&conn->ack, +data_len);
+			conn_ack(conn, +data_len);
 			tcp_out(conn, TH_ACK); /* ack the data */
 
 			if (tp_tcp_echo) {
@@ -859,7 +859,7 @@ next_state:
 				 * switch() */
 				data_len = conn->snd->len;
 				tcp_out(conn, TH_PSH); /* echo the input */
-				conn_seq(&conn->seq, +data_len);
+				conn_seq(conn, +data_len);
 			}
 		}
 		if (th && th->th_flags == TH_ACK && th_seq(th) == conn->ack) {
