@@ -956,7 +956,7 @@ static struct net_pkt *tp_make(void)
 {
 	struct net_pkt *pkt = tcp_pkt_alloc(sizeof(struct net_ipv4_hdr) +
 					sizeof(struct net_udp_hdr));
-	struct net_ipv4_hdr *ip = (void *) net_pkt_ip_data(pkt);
+	struct net_ipv4_hdr *ip = ip_get(pkt);
 	struct net_udp_hdr *uh = (void *) (ip + 1);
 	size_t len = sizeof(*ip) + sizeof(*uh);
 
@@ -1269,7 +1269,7 @@ static void tcp_conn_delete(struct tcp *conn)
 /* Test protolol input */
 void tp_input(struct net_pkt *pkt)
 {
-	struct net_ipv4_hdr *ip = (void *) net_pkt_ip_data(pkt);
+	struct net_ipv4_hdr *ip = ip_get(pkt);
 	struct net_udp_hdr *uh = (void *) (ip + 1);
 	size_t data_len = ntohs(uh->len) - sizeof(*uh);
 	struct tcp *conn = tcp_conn_search(pkt);
@@ -1362,7 +1362,7 @@ static struct net_pkt *tcp_make(struct tcp *conn, u8_t th_flags)
 {
 	struct net_pkt *pkt = tcp_pkt_alloc(sizeof(struct net_ipv4_hdr) +
 						sizeof(struct tcphdr));
-	struct net_ipv4_hdr *ip = (void *) net_pkt_ip_data(pkt);
+	struct net_ipv4_hdr *ip = ip_get(pkt);
 	struct tcphdr *th = (void *) (ip + 1);
 	size_t len = sizeof(*ip) + sizeof(*th);
 
@@ -1411,7 +1411,7 @@ static uint16_t cs(int32_t s)
 
 static void tcp_csum(struct net_pkt *pkt)
 {
-	struct net_ipv4_hdr *ip = (void *) net_pkt_ip_data(pkt);
+	struct net_ipv4_hdr *ip = ip_get(pkt);
 	struct tcphdr *th = (void *) (ip + 1);
 	u16_t len = ntohs(ip->len) - 20;
 	u32_t s;
