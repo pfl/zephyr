@@ -263,6 +263,7 @@ static sys_slist_t tcp_conns = SYS_SLIST_STATIC_INIT(&tcp_conns);
 static bool tp_enabled = IS_ENABLED(CONFIG_NET_TP);
 static enum tp_type tp_state;
 static bool tp_tcp_echo;
+static bool tp_trace;
 static sys_slist_t tp_mem = SYS_SLIST_STATIC_INIT(&tp_mem);
 static sys_slist_t tp_seq = SYS_SLIST_STATIC_INIT(&tp_mem);
 static sys_slist_t tp_nbufs = SYS_SLIST_STATIC_INIT(&tp_nbufs);
@@ -271,6 +272,7 @@ static sys_slist_t tp_q = SYS_SLIST_STATIC_INIT(&tp_q);
 
 static void tcp_in(struct tcp *conn, struct net_pkt *pkt);
 static void tcp_out(struct tcp *conn, u8_t th_flags);
+static void tcp_conn_delete(struct tcp *conn);
 static void tcp_add_to_retransmit(struct tcp *conn, struct net_pkt *pkt);
 static void tcp_retransmit(struct k_timer *timer);
 static void tcp_timer_cancel(struct tcp *conn);
@@ -612,24 +614,6 @@ static void tcp_retransmissions_flush(struct tcp *conn)
 		pkt = CONTAINER_OF(node, struct net_pkt, next);
 		tcp_pkt_unref(pkt);
 	}
-}
-
-static void tcp_conn_delete(struct tcp *conn)
-{
-	tcp_dbg("");
-
-	tcp_retransmissions_flush(conn);
-
-	tcp_win_free(conn->snd);
-	tcp_win_free(conn->rcv);
-
-	tcp_free(conn->src);
-	tcp_free(conn->dst);
-
-	sys_slist_find_and_remove(&tcp_conns, (sys_snode_t *) conn);
-	memset(conn, 0, sizeof(*conn));
-	tcp_free(conn);
-	tp_state = TP_NONE;
 }
 
 static const char *tcp_state_to_str(enum tcp_state state, bool prefix)
@@ -1191,6 +1175,17 @@ static struct tp_new *json_to_tp_new(void *data, size_t data_len)
 	return &tp;
 }
 
+static void tp_new_to_json(struct tp_new *tp, void *data, size_t *data_len)
+{
+	int error = json_obj_encode_buf(tp_new_dsc, ARRAY_SIZE(tp_new_dsc), tp,
+					data, *data_len);
+	if (error) {
+		tcp_err("json_obj_encode_buf()");
+	}
+
+	*data_len = error ? 0 : strlen(data);
+}
+
 #define TP_BOOL	1
 #define TP_INT	2
 
@@ -1227,6 +1222,46 @@ static void tp_new_find_and_apply(struct tp_new *tp, const char *key,
 			tcp_err("Unimplemented");
 		}
 	}
+}
+
+static void tp_out(struct tcp *conn, const char *msg, const char *key,
+			const char *value)
+{
+	if (tp_trace) {
+		size_t json_len;
+		static u8_t buf[128]; /* TODO: Merge all static buffers and
+					 eventually drop them */
+		struct tp_new tp = {
+			.msg = msg,
+			.data = { { .key = key, .value = value } },
+			.num_entries = 1
+		};
+		json_len = sizeof(buf);
+		tp_new_to_json(&tp, buf, &json_len);
+		if (json_len) {
+			tp_output(conn->iface, buf, json_len);
+		}
+	}
+}
+
+static void tcp_conn_delete(struct tcp *conn)
+{
+	tcp_dbg("");
+
+	tp_out(conn, "TP_TRACE", "event", "CONN_DELETE");
+
+	tcp_retransmissions_flush(conn);
+
+	tcp_win_free(conn->snd);
+	tcp_win_free(conn->rcv);
+
+	tcp_free(conn->src);
+	tcp_free(conn->dst);
+
+	sys_slist_find_and_remove(&tcp_conns, (sys_snode_t *) conn);
+	memset(conn, 0, sizeof(*conn));
+	tcp_free(conn);
+	tp_state = TP_NONE;
 }
 
 #if defined CONFIG_NET_TP
@@ -1298,6 +1333,7 @@ void tp_input(struct net_pkt *pkt)
 					TP_INT);
 		tp_new_find_and_apply(tp_new, "tcp_window", &tcp_window,
 					TP_INT);
+		tp_new_find_and_apply(tp_new, "tp_trace", &tp_trace, TP_BOOL);
 		tp_new_find_and_apply(tp_new, "tcp_echo", &tp_tcp_echo,
 					TP_BOOL);
 		break;
