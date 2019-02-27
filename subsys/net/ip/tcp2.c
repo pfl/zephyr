@@ -367,6 +367,7 @@ void tp_free(void *ptr, const char *file, int line, const char *func)
 				file, line, func, ptr);
 	}
 
+	memset(ptr, 0, mem->size);
 	k_free(mem);
 }
 
@@ -1268,7 +1269,6 @@ static void tcp_conn_delete(struct tcp *conn)
 	tcp_free(conn->dst);
 
 	sys_slist_find_and_remove(&tcp_conns, (sys_snode_t *) conn);
-	memset(conn, 0, sizeof(*conn));
 	tcp_free(conn);
 	tp_state = TP_NONE;
 }
