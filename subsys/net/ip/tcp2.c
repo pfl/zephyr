@@ -728,20 +728,29 @@ static void tcp_win_push(struct tcp_win *win, const void *buf, size_t len)
 	tcp_dbg("%s %p %zu->%zu byte(s)", win->name, nbuf, prev_len, win->len);
 }
 
-static struct net_buf *tcp_win_pop(struct tcp_win *win, size_t len)
+static struct net_buf *tcp_win_pop(struct tcp_win *w, size_t len)
 {
-	struct net_buf *nbuf = (void *) sys_slist_get(&win->nbufs);
-	size_t prev_len = win->len;
+	struct net_buf *buf, *out = NULL;
+	sys_snode_t *node;
 
-	tcp_assert(nbuf, "%s window is empty", win->name);
+	tcp_assert(len <= w->len, "Insufficient window length");
 
-	nbuf = CONTAINER_OF(nbuf, struct net_buf, next);
+	while (len) {
 
-	win->len -= nbuf->len;
+		node = sys_slist_get(&w->nbufs);
 
-	tcp_dbg("%s %p %zu->%zu byte(s)", win->name, nbuf, prev_len, win->len);
+		buf = CONTAINER_OF(node, struct net_buf, next);
 
-	return nbuf;
+		w->len -= buf->len;
+
+		out = out ? net_buf_frag_add(out, buf) : buf;
+
+		len -= buf->len;
+	}
+
+	tcp_dbg("%s len=%zu", w->name, net_buf_frags_len(out));
+
+	return out;
 }
 
 /* TCP state machine, everything happens here */
@@ -1071,10 +1080,10 @@ static void tcp_to_json(struct tcp *conn, void *data, size_t *data_len)
 	if (conn->rcv->len) {
 		static char buf[128];
 		ssize_t len;
-		struct net_buf *nbuf = tcp_win_pop(conn->rcv, 1);
+		struct net_buf *nbuf = tcp_win_pop(conn->rcv, conn->rcv->len);
 
-		len = net_buf_linearize(buf, sizeof(buf), nbuf, 0, nbuf->len);
-
+		len = net_buf_linearize(buf, sizeof(buf), nbuf, 0,
+					net_buf_frags_len(nbuf));
 		tcp_nbuf_unref(nbuf);
 
 		tp.data = hex_to_str(buf, len);
@@ -1492,17 +1501,23 @@ static void tcp_out(struct tcp *conn, u8_t th_flags)
 	struct net_pkt *pkt = tcp_make(conn, th_flags);
 
 	if (th_flags & TH_PSH) {
+		struct net_buf *data_out = tcp_win_pop(conn->snd,
+							conn->snd->len);
+		struct net_buf *buf = data_out, *tmp;
+		size_t len = net_buf_frags_len(data_out);
 
-		struct net_buf *data = tcp_win_pop(conn->snd, 1);
-
+		/* TODO: In an absense of consolidating pull/pullup(),
+		 * 	 this is really ugly */
+		while (buf) {
+			net_pkt_append(pkt, buf->len, buf->data, K_NO_WAIT);
+			tmp = buf->frags;
+			buf->frags = NULL;
+			tcp_nbuf_unref(buf);
+			buf = tmp;
+		}
 		/* TODO: There's a checksum problem with the following */
 		/*net_pkt_frag_add(pkt, data);*/
-
-		net_pkt_append(pkt, data->len, data->data, K_NO_WAIT);
-
-		net_pkt_adj(pkt, data->len);
-
-		tcp_nbuf_unref(data);
+		net_pkt_adj(pkt, len);
 	}
 
 	tcp_csum(pkt);
