@@ -168,7 +168,7 @@ enum tcp_conn_kind {
 struct tcp_win { /* TCP window */
 	char *name;
 	size_t len;
-	sys_slist_t nbufs;
+	sys_slist_t bufs;
 };
 
 struct tcp { /* TCP connection */
@@ -695,7 +695,7 @@ static struct tcp_win *tcp_win_new(const char *name)
 
 	strcpy(win->name, name);
 
-	sys_slist_init(&win->nbufs);
+	sys_slist_init(&win->bufs);
 
 	return win;
 }
@@ -704,7 +704,7 @@ static void tcp_win_free(struct tcp_win *win)
 {
 	struct net_buf *nbuf;
 
-	SYS_SLIST_FOR_EACH_CONTAINER(&win->nbufs, nbuf, next) {
+	SYS_SLIST_FOR_EACH_CONTAINER(&win->bufs, nbuf, next) {
 		tcp_dbg("%s %p len=%d", win->name, nbuf, nbuf->len);
 		tcp_nbuf_unref(nbuf);
 	}
@@ -722,7 +722,7 @@ static void tcp_win_push(struct tcp_win *win, const void *buf, size_t len)
 
 	memcpy(net_buf_add(nbuf, len), buf, len);
 
-	sys_slist_append(&win->nbufs, &nbuf->next);
+	sys_slist_append(&win->bufs, &nbuf->next);
 
 	win->len += len;
 
@@ -738,7 +738,7 @@ static struct net_buf *tcp_win_pop(struct tcp_win *w, size_t len)
 
 	while (len) {
 
-		node = sys_slist_get(&w->nbufs);
+		node = sys_slist_get(&w->bufs);
 
 		buf = CONTAINER_OF(node, struct net_buf, next);
 
@@ -809,7 +809,7 @@ next_state:
 			next = TCP_CLOSED;
 			break;
 		}
-		if (!th && !sys_slist_is_empty(&conn->snd->nbufs)) {
+		if (!th && !sys_slist_is_empty(&conn->snd->bufs)) {
 			size_t data_len = conn->snd->len;
 			tcp_out(conn, TH_PSH);
 			conn_seq(conn, + data_len);
