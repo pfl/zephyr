@@ -1081,20 +1081,8 @@ static void tcp_to_json(struct tcp *conn, void *data, size_t *data_len)
 		.op = "",
 	};
 
-	if (conn->rcv->len) {
-		static char buf[128];
-		ssize_t len;
-		struct net_buf *nbuf = tcp_win_pop(conn->rcv, conn->rcv->len);
 
-		len = net_buf_linearize(buf, sizeof(buf), nbuf, 0,
-					net_buf_frags_len(nbuf));
-		tcp_nbuf_unref(nbuf);
 
-		tp.data = hex_to_str(buf, len);
-		tcp_dbg("data=%s", tp.data);
-	}
-
-	error = json_obj_encode_buf(tp_descr, ARRAY_SIZE(tp_descr), &tp,
 					data, *data_len);
 	if (error) {
 		tcp_err("json_obj_encode_buf()");
