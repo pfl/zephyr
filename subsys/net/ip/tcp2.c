@@ -1536,6 +1536,8 @@ static void tcp_out(struct tcp *conn, u8_t th_flags)
 
 	tcp_csum(pkt);
 
+	tcp_dbg("%s", tcp_th(conn, pkt));
+
 	tcp_pkt_send(conn, pkt, th_flags & TH_SYN);
 }
 
