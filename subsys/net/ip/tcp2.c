@@ -1343,6 +1343,11 @@ void tp_input(struct net_pkt *pkt)
 			json_len = sizeof(buf);
 			tp_encode(tp, buf, &json_len);
 		}
+		if (is("SEND", tp->op)) {
+			ssize_t len = str_to_hex(buf, sizeof(buf), tp->data);
+			len = tcp_send(0, buf, len, 0);
+			tcp_dbg("%zd = tcp_send(\"%s\")", len, tp->data);
+		}
 		break;
 	case TP_CONFIG_REQUEST:
 		tp_new_find_and_apply(tp_new, "tcp_rto", &tcp_rto, TP_INT);
@@ -1601,7 +1606,11 @@ ssize_t tcp_recv(int fd, void *buf, size_t len, int flags)
 
 ssize_t tcp_send(int fd, const void *buf, size_t len, int flags)
 {
-	return 0;
+	struct tcp *conn = (void *) sys_slist_peek_head(&tcp_conns);
+
+	tcp_win_push(conn->snd, buf, len);
+
+	return len;
 }
 
 void tcp_bind(void) { }
