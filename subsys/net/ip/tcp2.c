@@ -688,44 +688,44 @@ static const char *tcp_th(struct tcp *conn, struct net_pkt *pkt)
 
 static struct tcp_win *tcp_win_new(const char *name)
 {
-	struct tcp_win *win = tcp_calloc(1, sizeof(struct tcp_win));
+	struct tcp_win *w = tcp_calloc(1, sizeof(struct tcp_win));
 
-	win->name = tcp_malloc(strlen(name) + 1);
+	w->name = tcp_malloc(strlen(name) + 1);
 
-	strcpy(win->name, name);
+	strcpy(w->name, name);
 
-	sys_slist_init(&win->bufs);
+	sys_slist_init(&w->bufs);
 
-	return win;
+	return w;
 }
 
-static void tcp_win_free(struct tcp_win *win)
+static void tcp_win_free(struct tcp_win *w)
 {
-	struct net_buf *nbuf;
+	struct net_buf *buf;
 
-	SYS_SLIST_FOR_EACH_CONTAINER(&win->bufs, nbuf, next) {
-		tcp_dbg("%s %p len=%d", win->name, nbuf, nbuf->len);
-		tcp_nbuf_unref(nbuf);
+	SYS_SLIST_FOR_EACH_CONTAINER(&w->bufs, buf, next) {
+		tcp_dbg("%s %p len=%d", w->name, buf, buf->len);
+		tcp_nbuf_unref(buf);
 	}
 
-	tcp_free(win->name);
-	tcp_free(win);
+	tcp_free(w->name);
+	tcp_free(w);
 }
 
-static void tcp_win_push(struct tcp_win *win, const void *buf, size_t len)
+static void tcp_win_push(struct tcp_win *w, const void *data, size_t len)
 {
-	struct net_buf *nbuf = tcp_nbuf_alloc(len);
-	size_t prev_len = win->len;
+	struct net_buf *buf = tcp_nbuf_alloc(len);
+	size_t prev_len = w->len;
 
-	tcp_assert(len, "");
+	tcp_assert(len, "Zero length data");
 
-	memcpy(net_buf_add(nbuf, len), buf, len);
+	memcpy(net_buf_add(buf, len), data, len);
 
-	sys_slist_append(&win->bufs, &nbuf->next);
+	sys_slist_append(&w->bufs, &buf->next);
 
-	win->len += len;
+	w->len += len;
 
-	tcp_dbg("%s %p %zu->%zu byte(s)", win->name, nbuf, prev_len, win->len);
+	tcp_dbg("%s %p %zu->%zu byte(s)", w->name, buf, prev_len, w->len);
 }
 
 static struct net_buf *tcp_win_pop(struct tcp_win *w, size_t len)
