@@ -1067,10 +1067,9 @@ static const struct json_obj_descr tp_descr[] = {
 	json_str(tp, op),
 };
 
-static void tcp_to_json(struct tcp *conn, void *data, size_t *data_len)
+static void tp_init(struct tcp *conn, struct tp *tp)
 {
-	int error;
-	struct tp tp = {
+	struct tp out = {
 		.msg = "",
 		.status = "",
 		.state = tcp_state_to_str(conn->state, true),
@@ -1081,14 +1080,29 @@ static void tcp_to_json(struct tcp *conn, void *data, size_t *data_len)
 		.op = "",
 	};
 
+	*tp = out;
+}
 
+static void tp_encode(struct tp *tp, void *data, size_t *data_len)
+{
+	int error;
 
+	error = json_obj_encode_buf(tp_descr, ARRAY_SIZE(tp_descr), tp,
 					data, *data_len);
 	if (error) {
 		tcp_err("json_obj_encode_buf()");
 	}
 
 	*data_len = error ? 0 : strlen(data);
+}
+
+static void tcp_to_json(struct tcp *conn, void *data, size_t *data_len)
+{
+	struct tp tp;
+
+	tp_init(conn, &tp);
+
+	tp_encode(&tp, data, data_len);
 }
 
 static struct tp *json_to_tp(void *data, size_t data_len)
