@@ -809,7 +809,7 @@ next_state:
 			next = TCP_CLOSED;
 			break;
 		}
-		if (!th && !sys_slist_is_empty(&conn->snd->bufs)) {
+		if (!th && conn->snd->len) {
 			size_t data_len = conn->snd->len;
 			tcp_out(conn, TH_PSH);
 			conn_seq(conn, + data_len);
