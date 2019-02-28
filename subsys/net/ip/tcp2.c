@@ -1612,6 +1612,8 @@ ssize_t tcp_send(int fd, const void *buf, size_t len, int flags)
 
 	tcp_win_push(conn->snd, buf, len);
 
+	tcp_in(conn, NULL);
+
 	return len;
 }
 
