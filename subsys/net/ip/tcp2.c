@@ -1336,7 +1336,12 @@ void tp_input(struct net_pkt *pkt)
 			tp_seq_stat();
 		}
 		if (is("RECV", tp->op)) {
-			tcp_dbg("rcv=%zd", tcp_recv(0, NULL, 0, 0));
+			ssize_t len = tcp_recv(0, buf, sizeof(buf), 0);
+			tp_init(conn, tp);
+			tp->data = hex_to_str(buf, len);
+			tcp_dbg("%zd = tcp_recv(\"%s\")", len, tp->data);
+			json_len = sizeof(buf);
+			tp_encode(tp, buf, &json_len);
 		}
 		break;
 	case TP_CONFIG_REQUEST:
@@ -1568,11 +1573,30 @@ out:
 	return;
 }
 
+static void tcp_chain_free(struct net_buf *buf)
+{
+	struct net_buf *next;
+
+	for ( ; buf; buf = next) {
+		next = buf->frags;
+		buf->frags = NULL;
+		tcp_nbuf_unref(buf);
+	}
+}
+
 ssize_t tcp_recv(int fd, void *buf, size_t len, int flags)
 {
-	struct tcp *conn = tcp_conn_search(NULL);
+	struct tcp *conn = (void *) sys_slist_peek_head(&tcp_conns);
+	ssize_t bytes_received = conn->rcv->len;
+	struct net_buf *data = tcp_win_pop(conn->rcv, bytes_received);
 
-	return conn->rcv->len;
+	tcp_assert(bytes_received < len, "Unimplemented");
+
+	net_buf_linearize(buf, len, data, 0, net_buf_frags_len(data));
+
+	tcp_chain_free(data);
+
+	return bytes_received;
 }
 
 ssize_t tcp_send(int fd, const void *buf, size_t len, int flags)
