@@ -810,9 +810,9 @@ next_state:
 			break;
 		}
 		if (!th && conn->snd->len) {
-			size_t data_len = conn->snd->len;
+			size_t prev_len = conn->snd->len;
 			tcp_out(conn, TH_PSH);
-			conn_seq(conn, + data_len);
+			conn_seq(conn, + (prev_len - conn->snd->len));
 		}
 		if (th && th->th_flags == (TH_ACK | TH_FIN)
 				&& th_seq(th) == conn->ack) { /* full-close */
