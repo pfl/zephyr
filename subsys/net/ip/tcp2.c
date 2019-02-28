@@ -1345,8 +1345,8 @@ void tp_input(struct net_pkt *pkt)
 		}
 		if (is("SEND", tp->op)) {
 			ssize_t len = str_to_hex(buf, sizeof(buf), tp->data);
-			len = tcp_send(0, buf, len, 0);
-			tcp_dbg("%zd = tcp_send(\"%s\")", len, tp->data);
+			tcp_dbg("tcp_send(\"%s\")", tp->data);
+			tcp_send(0, buf, len, 0);
 		}
 		break;
 	case TP_CONFIG_REQUEST:
