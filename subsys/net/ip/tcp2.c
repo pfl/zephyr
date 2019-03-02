@@ -1299,6 +1299,10 @@ void tp_input(struct net_pkt *pkt)
 	enum tp_type type;
 	static char buf[512];
 
+	if (4242 != ntohs(uh->dst_port)) {
+		return;
+	}
+
 	net_pkt_skip(pkt, sizeof(*ip) + sizeof(*uh));
 	net_pkt_read_new(pkt, buf, data_len);
 	buf[data_len] = '\0';
