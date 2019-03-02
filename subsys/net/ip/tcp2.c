@@ -52,6 +52,8 @@
  * 2. Compile and run samples/net/sockets/echo:
  *     # cmake -DBOARD=qemu_x86 \
  *       -DOVERLAY_CONFIG="overlay-tcp2.conf;overlay-tcp2-eth.conf" ..
+ *    or
+ *     # cmake -DBOARD=native_posix -DOVERLAY_CONFIG=overlay-tcp2.conf ..
  * 3. Connect with telnet:
  *     # telnet 192.0.2.1 4242
  *    or netcat:
