@@ -146,6 +146,13 @@ enum th_flags {
 	TH_URG = 1 << 5,
 };
 
+#define FIN TH_FIN /* or static const? */
+#define SYN TH_SYN
+#define RST TH_RST
+#define PSH TH_PSH
+#define ACK TH_ACK
+#define URG TH_URG
+
 enum tcp_state {
 	TCP_NONE = 0,
 	TCP_LISTEN,
@@ -755,6 +762,17 @@ static struct net_buf *tcp_win_pop(struct tcp_win *w, size_t len)
 	return out;
 }
 
+/*
+ * The following macros assume the presense of in the local context:
+ *  - struct tcphdr *th: pointer to the TCP header
+ *  - struct tcp *conn: pointer to the TCP connection
+ */
+#define SEQ(_cond) (th_seq(th) _cond conn->ack)
+#define TH(_fl, _cond...) (th && (th->th_flags _fl) _cond)
+
+/* TODO: macro to warn on no event */
+/* TODO: reset -> out of the loop */
+
 /* TCP state machine, everything happens here */
 static void tcp_in(struct tcp *conn, struct net_pkt *pkt)
 {
@@ -766,20 +784,24 @@ static void tcp_in(struct tcp *conn, struct net_pkt *pkt)
 		tcp_th(conn, pkt) : "",
 		conn->state != TCP_NONE ? tcp_state_to_str(conn->state, false) :
 		"", conn->seq, conn->ack);
+
+	if (TH(& RST)) {
+		th = NULL;
+		next = TCP_CLOSED;
+	}
 next_state:
 	switch (conn->state) {
 	case TCP_NONE:
 		next = TCP_LISTEN;
 		break;
 	case TCP_LISTEN:
-		/* TODO: next 4 lines into one op */
-		if (conn->kind == TCP_ACTIVE) {
+		if (conn->kind == TCP_ACTIVE) {/* TODO: next lines into op */
 			tcp_out(conn, TH_SYN);
 			conn_seq(conn, + 1);
 			next = TCP_SYN_SENT;
 		}
-		if (th && th->th_flags == TH_SYN) {
-			conn->ack = th_seq(th);
+		if (TH(== SYN)) {
+			conn->ack = th_seq(th); /* capture peer's isn */
 			next = TCP_SYN_RECEIVED;
 		}
 		break;
@@ -793,12 +815,11 @@ next_state:
 		/* TODO: validate/store sn in one op */
 		/* TODO: get to LISTENING after timeout; reset ack on SYN? */
 		/* passive open */
-		if (th && th->th_flags == TH_ACK && th_seq(th) == conn->ack) {
+		if (TH(== ACK, && SEQ(==))) {
 			tcp_timer_cancel(conn);
 			next = TCP_ESTABLISHED;
 		}
-		if (th && th->th_flags == (TH_SYN | TH_ACK) &&
-				th_ack(th) == conn->seq) { /* active open */
+		if (TH(== (SYN | ACK), && SEQ(==))) { /* active open */
 			tcp_timer_cancel(conn);
 			conn_ack(conn, th_seq(th) + 1);
 			tcp_out(conn, TH_ACK);
@@ -806,32 +827,27 @@ next_state:
 		}
 		break;
 	case TCP_ESTABLISHED:
-		if (th && th->th_flags & TH_RST) {
-			next = TCP_CLOSED;
-			break;
-		}
 		if (!th && conn->snd->len) {
 			size_t prev_len = conn->snd->len;
 			tcp_out(conn, TH_PSH);
 			conn_seq(conn, + (prev_len - conn->snd->len));
 		}
-		if (th && th->th_flags == (TH_ACK | TH_FIN)
-				&& th_seq(th) == conn->ack) { /* full-close */
+		if (TH(== (ACK | FIN), && SEQ(==))) { /* full-close */
 			conn_ack(conn, + 1);
 			tcp_out(conn, TH_ACK);/* TODO: this could be optional */
 			next = TCP_CLOSE_WAIT;
 			break;
 		}
-		if (th && th->th_flags & TH_PSH && th_seq(th) < conn->ack) {
+		if (TH(& PSH, && SEQ(<))) {
 			tcp_out(conn, TH_ACK); /* peer has resent */
 			break;
 		}
-		if (th && th->th_flags & TH_PSH && th_seq(th) > conn->ack) {
+		if (TH(& PSH, && SEQ(>))) {
 			tcp_assert(false, "Unimplemeted: send RESET here");
 			break;
 		}
 		/* Non piggybacking version for clarity now */
-		if (th && th->th_flags & TH_PSH && th_seq(th) == conn->ack) {
+		if (TH(& PSH, && SEQ(==))) {
 			/* TODO: next 4 lines into one op */
 			struct net_ipv4_hdr *ip = ip_get(pkt);
 			size_t th_off = th->th_off * 4;
@@ -863,23 +879,20 @@ next_state:
 				conn_seq(conn, + data_len);
 			}
 		}
-		if (th && th->th_flags == TH_ACK && th_seq(th) == conn->ack) {
+		if (TH(== ACK, && SEQ(==))) {
 			/* tcp_win_clear(&conn->snd); */
 			break;
 		}
 		break; /* TODO: Catch all the rest here */
 	case TCP_CLOSE_WAIT:
-		tcp_out(conn, TH_FIN | TH_ACK);
+		tcp_out(conn, FIN | ACK);
 		next = TCP_LAST_ACK;
 		break;
 	case TCP_LAST_ACK:
-		if (th && th->th_flags & TH_RST) {
+		if (TH(== ACK, && SEQ(==))) {
 			next = TCP_CLOSED;
+			break;
 		}
-		if (th && th->th_flags & TH_ACK && th_seq(th) == conn->ack) {
-			next = TCP_CLOSED;
-		}
-		break;
 	case TCP_CLOSED:
 		if (tp_enabled == false) {
 			tcp_conn_delete(conn);
