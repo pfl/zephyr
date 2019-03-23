@@ -774,17 +774,28 @@ static struct net_buf *tcp_win_pop(struct tcp_win *w, size_t len)
 /* TODO: macro to warn on no event */
 /* TODO: reset -> out of the loop */
 
+static const char *tcp_conn_state(struct tcp *conn, struct net_pkt *pkt)
+{
+#define MAX_S 64
+	static char s[MAX_S];
+
+	snprintf(s, MAX_S, "%s %s %u/%u", (pkt && net_pkt_get_len(pkt) >=
+		(sizeof(struct net_ipv4_hdr) + sizeof(struct tcphdr))) ?
+		tcp_th(conn, pkt) : "",
+		conn->state != TCP_NONE ? tcp_state_to_str(conn->state, false) :
+		"", conn->seq, conn->ack);
+
+	return s;
+#undef MAX_S
+}
+
 /* TCP state machine, everything happens here */
 static void tcp_in(struct tcp *conn, struct net_pkt *pkt)
 {
 	enum tcp_state next = TCP_NONE;
 	struct tcphdr *th = pkt ? th_get(pkt) : NULL;
 
-	tcp_dbg("%s %s %u/%u", (pkt && net_pkt_get_len(pkt) >=
-		(sizeof(struct net_ipv4_hdr) + sizeof(struct tcphdr))) ?
-		tcp_th(conn, pkt) : "",
-		conn->state != TCP_NONE ? tcp_state_to_str(conn->state, false) :
-		"", conn->seq, conn->ack);
+	tcp_dbg("%s", tcp_conn_state(conn, pkt));
 
 	if (TH(& RST)) {
 		th = NULL;
