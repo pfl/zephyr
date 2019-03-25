@@ -90,7 +90,7 @@ LOG_MODULE_REGISTER(net_tcp2);
 #define th_seq(_x) ntohl((_x)->th_seq)
 #define th_ack(_x) ntohl((_x)->th_ack)
 #define ip_get(_x) ((struct net_ipv4_hdr *) net_pkt_ip_data((_x)))
-#define th_get(_x) ((struct tcphdr *) (ip_get(_x) + 1))
+#define th_get(_x) ((_x) ? ((struct tcphdr *) (ip_get(_x) + 1)) : NULL)
 
 #define tcp_malloc(_size) tp_malloc(_size, basename(__FILE__), __LINE__)
 #define tcp_calloc(_nmemb, _size) \
@@ -876,7 +876,7 @@ static ssize_t tcp_data_get(struct net_pkt *pkt, void **data, ssize_t *data_len)
 static void tcp_in(struct tcp *conn, struct net_pkt *pkt)
 {
 	enum tcp_state next = TCP_NONE;
-	struct tcphdr *th = pkt ? th_get(pkt) : NULL;
+	struct tcphdr *th = th_get(pkt);
 
 	tcp_dbg("%s", tcp_conn_state(conn, pkt));
 
