@@ -892,7 +892,7 @@ next_state:
 		break;
 	case TCP_LISTEN:
 		if (conn->kind == TCP_ACTIVE) {/* TODO: next lines into op */
-			tcp_out(conn, TH_SYN);
+			tcp_out(conn, SYN);
 			conn_seq(conn, + 1);
 			next = TCP_SYN_SENT;
 		}
@@ -903,7 +903,7 @@ next_state:
 		break;
 	case TCP_SYN_RECEIVED:
 		conn_ack(conn, + 1);
-		tcp_out(conn, TH_SYN | TH_ACK);
+		tcp_out(conn, SYN | ACK);
 		conn_seq(conn, + 1);
 		next = TCP_SYN_SENT;
 		break;
@@ -918,28 +918,28 @@ next_state:
 		if (EQ(SYN | ACK, SEQ(==))) { /* active open */
 			tcp_timer_cancel(conn);
 			conn_ack(conn, th_seq(th) + 1);
-			tcp_out(conn, TH_ACK);
+			tcp_out(conn, ACK);
 			next = TCP_ESTABLISHED;
 		}
 		break;
 	case TCP_ESTABLISHED:
-		if (!th && conn->snd->len) {
+		if (!th && conn->snd->len) { /* TODO: Out of the loop */
 			ssize_t data_len;
-			tcp_out(conn, TH_PSH, &data_len);
+			tcp_out(conn, PSH, &data_len);
 			conn_seq(conn, + data_len);
 		}
 		if (EQ(FIN | ACK, SEQ(==))) { /* full-close */
 			conn_ack(conn, + 1);
-			tcp_out(conn, TH_ACK);/* TODO: this could be optional */
+			tcp_out(conn, ACK);/* TODO: this could be optional */
 			next = TCP_CLOSE_WAIT;
 			break;
 		}
 		if (ON(PSH, SEQ(<))) {
-			tcp_out(conn, TH_ACK); /* peer has resent */
+			tcp_out(conn, ACK); /* peer has resent */
 			break;
 		}
 		if (ON(PSH, SEQ(>))) {
-			tcp_assert(false, "Unimplemeted: send RESET here");
+			tcp_assert(false, "Unimplemeted: send RST here");
 			break;
 		}
 		/* Non piggybacking version for clarity now */
@@ -955,11 +955,11 @@ next_state:
 			tcp_win_push(conn->rcv, data, data_len);
 
 			conn_ack(conn, + data_len);
-			tcp_out(conn, TH_ACK); /* ack the data */
+			tcp_out(conn, ACK); /* ack the data */
 
 			if (tp_tcp_echo) { /* TODO: Out of switch()? */
 				tcp_win_push(conn->snd, data, data_len);
-				tcp_out(conn, TH_PSH, &data_len);
+				tcp_out(conn, PSH, &data_len);
 				conn_seq(conn, + data_len);
 			}
 		}
