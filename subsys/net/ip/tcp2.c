@@ -891,7 +891,7 @@ next_state:
 		next = TCP_LISTEN;
 		break;
 	case TCP_LISTEN:
-		if (conn->kind == TCP_ACTIVE) {/* TODO: next lines into op */
+		if (conn->kind == TCP_ACTIVE) {
 			tcp_out(conn, SYN);
 			conn_seq(conn, + 1);
 			next = TCP_SYN_SENT;
@@ -908,10 +908,7 @@ next_state:
 		next = TCP_SYN_SENT;
 		break;
 	case TCP_SYN_SENT:
-		/* TODO: validate/store sn in one op */
-		/* TODO: get to LISTENING after timeout; reset ack on SYN? */
-		/* passive open */
-		if (EQ(ACK, SEQ(==))) {
+		if (EQ(ACK, SEQ(==))) { /* passive open */
 			tcp_timer_cancel(conn);
 			next = TCP_ESTABLISHED;
 		}
