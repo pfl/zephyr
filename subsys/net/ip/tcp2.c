@@ -873,6 +873,13 @@ static ssize_t tcp_data_get(struct net_pkt *pkt, void **data, ssize_t *data_len)
 	return len;
 }
 
+#define conn_state(_conn, _s) do {				\
+	tcp_dbg("%s->%s",					\
+		tcp_state_to_str((_conn)->state, false),	\
+		tcp_state_to_str((_s), false));			\
+	conn->state = _s;					\
+} while (0)
+
 /* TCP state machine, everything happens here */
 static void tcp_in(struct tcp *conn, struct net_pkt *pkt)
 {
@@ -887,13 +894,13 @@ static void tcp_in(struct tcp *conn, struct net_pkt *pkt)
 next_state:
 	switch (conn->state) {
 	case TCP_NONE:
-		next = TCP_LISTEN;
-		break;
+		conn_state(conn, TCP_LISTEN); /* fall-through */
 	case TCP_LISTEN:
 		if (conn->kind == TCP_ACTIVE) {
 			tcp_out(conn, SYN);
 			conn_seq(conn, + 1);
 			next = TCP_SYN_SENT;
+			break;
 		}
 		if (EQ(SYN)) {
 			conn->ack = th_seq(th); /* capture peer's isn */
@@ -986,15 +993,13 @@ next_state:
 	}
 
 	if (th) {
-		tcp_assert(th->th_flags == 0, "Unhandled flags: %s",
+		tcp_assert(th->th_flags == 0, "Uconsumed flags: %s",
 				tcp_th_flags(th->th_flags));
 	}
 
 	if (next) {
 		th = NULL;
-		tcp_dbg("%s->%s", tcp_state_to_str(conn->state, false),
-			tcp_state_to_str(next, false));
-		conn->state = next;
+		conn_state(conn, next);
 		next = TCP_NONE;
 		goto next_state;
 	}
