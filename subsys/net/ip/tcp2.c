@@ -270,10 +270,11 @@ static int tcp_retries = 3;
 static int tcp_window = 1280; /* Receive window size */
 static sys_slist_t tcp_conns = SYS_SLIST_STATIC_INIT(&tcp_conns);
 
-static bool tp_enabled = IS_ENABLED(CONFIG_NET_TP);
 static enum tp_type tp_state;
 static bool tp_tcp_echo;
+static bool tp_tcp_conn_delete = true;
 static bool tp_trace;
+
 static sys_slist_t tp_mem = SYS_SLIST_STATIC_INIT(&tp_mem);
 static sys_slist_t tp_seq = SYS_SLIST_STATIC_INIT(&tp_mem);
 static sys_slist_t tp_nbufs = SYS_SLIST_STATIC_INIT(&tp_nbufs);
@@ -976,9 +977,7 @@ next_state:
 		}
 		break;
 	case TCP_CLOSED:
-		if (tp_enabled == false) {
-			tcp_conn_delete(conn);
-		}
+		tcp_conn_delete(conn);
 		break;
 	case TCP_TIME_WAIT:
 	case TCP_CLOSING:
@@ -1372,6 +1371,10 @@ static void tcp_conn_delete(struct tcp *conn)
 
 	tp_out(conn, "TP_TRACE", "event", "CONN_DELETE");
 
+	if (tp_tcp_conn_delete == false) {
+		return;
+	}
+
 	tcp_retransmissions_flush(conn);
 
 	tcp_win_free(conn->snd);
@@ -1469,6 +1472,9 @@ void tp_input(struct net_pkt *pkt)
 		tp_new_find_and_apply(tp_new, "tp_trace", &tp_trace, TP_BOOL);
 		tp_new_find_and_apply(tp_new, "tcp_echo", &tp_tcp_echo,
 					TP_BOOL);
+		tp_new_find_and_apply(tp_new, "tp_tcp_conn_delete",
+					&tp_tcp_conn_delete, TP_BOOL);
+
 		break;
 	case TP_INTROSPECT_REQUEST:
 		json_len = sizeof(buf);
