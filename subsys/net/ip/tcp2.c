@@ -941,7 +941,8 @@ next_state:
 			break;
 		}
 		if (ON(PSH, SEQ(>))) {
-			tcp_assert(false, "Unimplemeted: send RST here");
+			tcp_out(conn, RST);
+			next = TCP_CLOSED;
 			break;
 		}
 		/* Non piggybacking version for clarity now */
