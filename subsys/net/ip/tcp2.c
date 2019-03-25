@@ -904,12 +904,11 @@ next_state:
 			break;
 		}
 		if (EQ(SYN)) {
-			conn->ack = th_seq(th); /* capture peer's isn */
+			conn_ack(conn, th_seq(th) + 1); /* capture peer's isn */
 			next = TCP_SYN_RECEIVED;
 		}
 		break;
 	case TCP_SYN_RECEIVED:
-		conn_ack(conn, + 1);
 		tcp_out(conn, SYN | ACK);
 		conn_seq(conn, + 1);
 		next = TCP_SYN_SENT;
