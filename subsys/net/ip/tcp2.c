@@ -900,9 +900,7 @@ next_state:
 			tcp_out(conn, SYN);
 			conn_seq(conn, + 1);
 			next = TCP_SYN_SENT;
-			break;
-		}
-		if (EQ(SYN)) {
+		} else if (EQ(SYN)) {
 			conn_ack(conn, th_seq(th) + 1); /* capture peer's isn */
 			next = TCP_SYN_RECEIVED;
 		}
