@@ -991,7 +991,7 @@ next_state:
 	}
 
 	if (th) {
-		tcp_assert(th->th_flags == 0, "Uconsumed flags: %s",
+		tcp_assert(th->th_flags == 0, "Unconsumed flags: %s",
 				tcp_th_flags(th->th_flags));
 	}
 
