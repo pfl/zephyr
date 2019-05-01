@@ -64,6 +64,7 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(net_tcp2);
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <zephyr.h>
@@ -146,7 +147,7 @@ enum th_flags {
 	TH_URG = 1 << 5,
 };
 
-#define FIN TH_FIN /* or static const? */
+#define FIN TH_FIN /* drop the prefix in the above enum? */
 #define SYN TH_SYN
 #define RST TH_RST
 #define PSH TH_PSH
@@ -280,7 +281,7 @@ static sys_slist_t tp_pkts = SYS_SLIST_STATIC_INIT(&tp_pkts);
 static sys_slist_t tp_q = SYS_SLIST_STATIC_INIT(&tp_q);
 
 static void tcp_in(struct tcp *conn, struct net_pkt *pkt);
-static void tcp_out(struct tcp *conn, u8_t th_flags);
+static void tcp_out(struct tcp *conn, u8_t th_flags, ...);
 static void tcp_conn_delete(struct tcp *conn);
 static void tcp_add_to_retransmit(struct tcp *conn, struct net_pkt *pkt);
 static void tcp_retransmit(struct k_timer *timer);
@@ -650,6 +651,44 @@ out:
 	return prefix ? s : (s + 4);
 }
 
+static const char *tcp_th_flags(u8_t fl)
+{
+#define FL_MAX 80
+	static char buf[FL_MAX];
+	char *s = buf;
+	*s = '\0';
+
+	if (fl) {
+		if (fl & TH_SYN) {
+			strcat(s, "SYN,");
+			s += 4;
+		}
+		if (fl & TH_FIN) {
+			strcat(s, "FIN,");
+			s += 4;
+		}
+		if (fl & TH_ACK) {
+			strcat(s, "ACK,");
+			s += 4;
+		}
+		if (fl & TH_PSH) {
+			strcat(s, "PSH,");
+			s += 4;
+		}
+		if (fl & TH_RST) {
+			strcat(s, "RST,");
+			s += 4;
+		}
+		if (fl & TH_URG) {
+			strcat(s, "URG,");
+			s += 4;
+		}
+		s[strlen(s) - 1] = '\0';
+	}
+
+	return buf;
+}
+
 static const char *tcp_th(struct tcp *conn, struct net_pkt *pkt)
 {
 #define FL_MAX 80
@@ -767,11 +806,37 @@ static struct net_buf *tcp_win_pop(struct tcp_win *w, size_t len)
  *  - struct tcphdr *th: pointer to the TCP header
  *  - struct tcp *conn: pointer to the TCP connection
  */
-#define SEQ(_cond) (th_seq(th) _cond conn->ack)
-#define TH(_fl, _cond...) (th && (th->th_flags _fl) _cond)
+#define SEQ(_cond) (th && (th_seq(th) _cond conn->ack))
 
-/* TODO: macro to warn on no event */
-/* TODO: reset -> out of the loop */
+static bool th_is_present(struct tcphdr *th, const u8_t fl, bool cond)
+{
+	bool present = false;
+
+	if (th && cond && (fl & th->th_flags)) {
+		th->th_flags &= ~fl;
+		present = true;
+	}
+
+	return present;
+}
+
+#define ON(_fl, _cond...) \
+	th_is_present(th, _fl, strlen("" #_cond) ? _cond : true)
+
+static bool th_is_equal(struct tcphdr *th, const u8_t fl, bool cond)
+{
+	bool equal = false;
+
+	if (th && cond && (fl == th->th_flags)) {
+		th->th_flags &= ~fl;
+		equal = true;
+	}
+
+	return equal;
+}
+
+#define EQ(_fl, _cond...) \
+	th_is_equal(th, _fl, strlen("" #_cond) ? _cond : true)
 
 static const char *tcp_conn_state(struct tcp *conn, struct net_pkt *pkt)
 {
@@ -788,6 +853,25 @@ static const char *tcp_conn_state(struct tcp *conn, struct net_pkt *pkt)
 #undef MAX_S
 }
 
+static ssize_t tcp_data_get(struct net_pkt *pkt, void **data, ssize_t *data_len)
+{
+	struct net_ipv4_hdr *ip = ip_get(pkt);
+	struct tcphdr *th = th_get(pkt);
+	size_t th_off = th->th_off * 4;
+	ssize_t len = ntohs(ip->len) - sizeof(*ip) - th_off;
+	static u8_t buf[64];/* The absence of _linearize()
+				leads to this temp workaround */
+	tcp_assert(len <= sizeof(buf), "Insufficient buffer for data");
+
+	net_pkt_skip(pkt, sizeof(*ip) + th_off);
+	net_pkt_read_new(pkt, buf, len);
+
+	*data = buf;
+	*data_len = len;
+
+	return len;
+}
+
 /* TCP state machine, everything happens here */
 static void tcp_in(struct tcp *conn, struct net_pkt *pkt)
 {
@@ -796,7 +880,7 @@ static void tcp_in(struct tcp *conn, struct net_pkt *pkt)
 
 	tcp_dbg("%s", tcp_conn_state(conn, pkt));
 
-	if (TH(& RST)) {
+	if (ON(RST)) {
 		th = NULL;
 		next = TCP_CLOSED;
 	}
@@ -811,7 +895,7 @@ next_state:
 			conn_seq(conn, + 1);
 			next = TCP_SYN_SENT;
 		}
-		if (TH(== SYN)) {
+		if (EQ(SYN)) {
 			conn->ack = th_seq(th); /* capture peer's isn */
 			next = TCP_SYN_RECEIVED;
 		}
@@ -826,11 +910,11 @@ next_state:
 		/* TODO: validate/store sn in one op */
 		/* TODO: get to LISTENING after timeout; reset ack on SYN? */
 		/* passive open */
-		if (TH(== ACK, && SEQ(==))) {
+		if (EQ(ACK, SEQ(==))) {
 			tcp_timer_cancel(conn);
 			next = TCP_ESTABLISHED;
 		}
-		if (TH(== (SYN | ACK), && SEQ(==))) { /* active open */
+		if (EQ(SYN | ACK, SEQ(==))) { /* active open */
 			tcp_timer_cancel(conn);
 			conn_ack(conn, th_seq(th) + 1);
 			tcp_out(conn, TH_ACK);
@@ -839,58 +923,46 @@ next_state:
 		break;
 	case TCP_ESTABLISHED:
 		if (!th && conn->snd->len) {
-			size_t prev_len = conn->snd->len;
-			tcp_out(conn, TH_PSH);
-			conn_seq(conn, + (prev_len - conn->snd->len));
+			ssize_t data_len;
+			tcp_out(conn, TH_PSH, &data_len);
+			conn_seq(conn, + data_len);
 		}
-		if (TH(== (ACK | FIN), && SEQ(==))) { /* full-close */
+		if (EQ(FIN | ACK, SEQ(==))) { /* full-close */
 			conn_ack(conn, + 1);
 			tcp_out(conn, TH_ACK);/* TODO: this could be optional */
 			next = TCP_CLOSE_WAIT;
 			break;
 		}
-		if (TH(& PSH, && SEQ(<))) {
+		if (ON(PSH, SEQ(<))) {
 			tcp_out(conn, TH_ACK); /* peer has resent */
 			break;
 		}
-		if (TH(& PSH, && SEQ(>))) {
+		if (ON(PSH, SEQ(>))) {
 			tcp_assert(false, "Unimplemeted: send RESET here");
 			break;
 		}
 		/* Non piggybacking version for clarity now */
-		if (TH(& PSH, && SEQ(==))) {
-			/* TODO: next 4 lines into one op */
-			struct net_ipv4_hdr *ip = ip_get(pkt);
-			size_t th_off = th->th_off * 4;
-			ssize_t data_len = ntohs(ip->len) - sizeof(*ip) - th_off;
-			static u8_t data[64];/* The absence of _linearize()
-						leads to this temp workaround */
-			tcp_assert(data_len <= sizeof(data),
-					"Insufficient buffer for data");
+		if (ON(PSH, SEQ(==))) {
+			void *data;
+			ssize_t data_len;
 
-			if (data_len <= 0) { /* Send a reset? */
-				next = TCP_CLOSED;
+			if (tcp_data_get(pkt, &data, &data_len) <= 0) {
+				next = TCP_CLOSED;/* TODO: Send a reset? */
 				break;
 			}
 
-			net_pkt_skip(pkt, sizeof(*ip) + th_off);
-			net_pkt_read_new(pkt, data, data_len);
-
 			tcp_win_push(conn->rcv, data, data_len);
-			tcp_win_push(conn->snd, data, data_len);
 
 			conn_ack(conn, + data_len);
 			tcp_out(conn, TH_ACK); /* ack the data */
 
-			if (tp_tcp_echo) {
-				/* TODO: Move this out of the state machine
-				 * switch() */
-				data_len = conn->snd->len;
-				tcp_out(conn, TH_PSH); /* echo the input */
+			if (tp_tcp_echo) { /* TODO: Out of switch()? */
+				tcp_win_push(conn->snd, data, data_len);
+				tcp_out(conn, TH_PSH, &data_len);
 				conn_seq(conn, + data_len);
 			}
 		}
-		if (TH(== ACK, && SEQ(==))) {
+		if (EQ(ACK, SEQ(==))) {
 			/* tcp_win_clear(&conn->snd); */
 			break;
 		}
@@ -900,10 +972,10 @@ next_state:
 		next = TCP_LAST_ACK;
 		break;
 	case TCP_LAST_ACK:
-		if (TH(== ACK, && SEQ(==))) {
+		if (EQ(ACK, SEQ(==))) {
 			next = TCP_CLOSED;
-			break;
 		}
+		break;
 	case TCP_CLOSED:
 		if (tp_enabled == false) {
 			tcp_conn_delete(conn);
@@ -916,6 +988,11 @@ next_state:
 	default:
 		tcp_assert(false, "%s is unimplemented",
 				tcp_state_to_str(conn->state, true));
+	}
+
+	if (th) {
+		tcp_assert(th->th_flags == 0, "Unhandled flags: %s",
+				tcp_th_flags(th->th_flags));
 	}
 
 	if (next) {
@@ -1545,15 +1622,22 @@ static void tcp_add_to_retransmit(struct tcp *conn, struct net_pkt *pkt)
 	}
 }
 
-static void tcp_out(struct tcp *conn, u8_t th_flags)
+static void tcp_out(struct tcp *conn, u8_t th_flags, ...)
 {
 	struct net_pkt *pkt = tcp_make(conn, th_flags);
 
 	if (th_flags & TH_PSH) {
+		va_list ap;
+		ssize_t *data_len;
 		struct net_buf *data_out = tcp_win_pop(conn->snd,
 							conn->snd->len);
 		struct net_buf *buf = data_out, *tmp;
 		size_t len = net_buf_frags_len(data_out);
+
+		va_start(ap, th_flags);
+		data_len = va_arg(ap, ssize_t *);
+		*data_len = len;
+		va_end(ap);
 
 		/* TODO: In an absense of consolidating pull/pullup(),
 		 * 	 this is really ugly */
