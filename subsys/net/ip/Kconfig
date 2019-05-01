@@ -302,6 +302,12 @@ config NET_TCP2
 	help
 	  Enable experimental TCP.
 
+config NET_TP
+	bool "Enable JSON based test protocol (UDP)"
+	default n
+	help
+	  Enable JSON based test protocol (UDP).
+
 config NET_UDP
 	bool "Enable UDP"
 	default y
