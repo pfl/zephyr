@@ -1,0 +1,18 @@
+
+- Include tp.h
+- Drop TH_
+- Move tcp_out() above state machine
+- Move net_pkt_get() above and drop redundant declaration
+- Take into use CONFIG_TCP*
+- Implement Listen to port over json
+- CONFIG_NET_TP -> TEST_PROTOCOL
+- tcp_dbg -> tp_dbg for TP
+- Implement RTT discovery
+- Document _listen and _connect in tcp2_check
+- Make TCP check to work without TP
+- Make tp_input eat only json
+- Make tp to register callback in order to be reusable
+- Change to 192. for SLIP
+- Split all configurations and document
+- Move this to TODO
+- Check how to integrate TODO with github
