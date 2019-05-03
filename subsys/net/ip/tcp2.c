@@ -865,7 +865,7 @@ static ssize_t tcp_data_get(struct net_pkt *pkt, void **data, ssize_t *data_len)
 	tcp_assert(len <= sizeof(buf), "Insufficient buffer for data");
 
 	net_pkt_skip(pkt, sizeof(*ip) + th_off);
-	net_pkt_read_new(pkt, buf, len);
+	net_pkt_read(pkt, buf, len);
 
 	*data = buf;
 	*data_len = len;
@@ -1005,7 +1005,7 @@ next_state:
 
 static struct net_pkt *net_pkt_get(size_t len)
 {
-	struct net_pkt *pkt = net_pkt_get_reserve_tx(K_NO_WAIT);
+	struct net_pkt *pkt = net_pkt_alloc(K_NO_WAIT);
 	struct net_buf *nbuf = net_pkt_get_frag(pkt, K_NO_WAIT);
 
 	tcp_assert(pkt && nbuf, "");
@@ -1114,8 +1114,11 @@ static void tcp_pkt_send(struct tcp *conn, struct net_pkt *pkt, bool retransmit)
 static void tp_output(struct net_if *iface, void *data, size_t data_len)
 {
 	struct net_pkt *pkt = tp_make();
+	struct net_buf *buf = net_pkt_get_frag(pkt, K_NO_WAIT);
 
-	net_pkt_append(pkt, data_len, data, K_NO_WAIT);
+	memcpy(net_buf_add(buf, data_len), data, data_len);
+
+	net_pkt_frag_add(pkt, buf);
 
 	net_pkt_adj(pkt, data_len);
 
@@ -1407,7 +1410,7 @@ void tp_input(struct net_pkt *pkt)
 	}
 
 	net_pkt_skip(pkt, sizeof(*ip) + sizeof(*uh));
-	net_pkt_read_new(pkt, buf, data_len);
+	net_pkt_read(pkt, buf, data_len);
 	buf[data_len] = '\0';
 	data_len += 1;
 
@@ -1416,7 +1419,7 @@ void tp_input(struct net_pkt *pkt)
 	data_len = ntohs(uh->len) - sizeof(*uh);
 	net_pkt_cursor_init(pkt);
 	net_pkt_skip(pkt, sizeof(*ip) + sizeof(*uh));
-	net_pkt_read_new(pkt, buf, data_len);
+	net_pkt_read(pkt, buf, data_len);
 	buf[data_len] = '\0';
 	data_len += 1;
 
@@ -1627,6 +1630,34 @@ static void tcp_add_to_retransmit(struct tcp *conn, struct net_pkt *pkt)
 	}
 }
 
+/* TODO: Rework this */
+static void tcp_linearize(struct net_pkt *pkt)
+{
+	struct net_buf *buf, *tmp;
+	sys_slist_t bufs;
+
+	sys_slist_init(&bufs);
+
+	while (pkt->frags) {
+		struct net_buf *buf = pkt->frags;
+		tmp = net_buf_alloc_len(&tcp2_nbufs, buf->len,
+					K_NO_WAIT);
+		memcpy(net_buf_add(tmp, buf->len), buf->data, buf->len);
+		sys_slist_append(&bufs, &tmp->next);
+		net_pkt_frag_del(pkt, NULL, pkt->frags);
+	}
+
+	buf = net_pkt_get_frag(pkt, K_NO_WAIT);
+
+	while ((tmp = (void *) sys_slist_get(&bufs))) {
+		tmp = CONTAINER_OF(tmp, struct net_buf, next);
+		memcpy(net_buf_add(buf, tmp->len), tmp->data, tmp->len);
+		net_buf_unref(tmp);
+	}
+
+	net_pkt_frag_add(pkt, buf);
+}
+
 static void tcp_out(struct tcp *conn, u8_t th_flags, ...)
 {
 	struct net_pkt *pkt = tcp_make(conn, th_flags);
@@ -1647,7 +1678,9 @@ static void tcp_out(struct tcp *conn, u8_t th_flags, ...)
 		/* TODO: In an absense of consolidating pull/pullup(),
 		 * 	 this is really ugly */
 		while (buf) {
-			net_pkt_append(pkt, buf->len, buf->data, K_NO_WAIT);
+			struct net_buf *nb = net_pkt_get_frag(pkt, K_NO_WAIT);
+			memcpy(net_buf_add(nb, buf->len), buf->data, buf->len);
+			net_pkt_frag_add(pkt, nb);
 			tmp = buf->frags;
 			buf->frags = NULL;
 			tcp_nbuf_unref(buf);
@@ -1657,6 +1690,8 @@ static void tcp_out(struct tcp *conn, u8_t th_flags, ...)
 		/*net_pkt_frag_add(pkt, data);*/
 		net_pkt_adj(pkt, len);
 	}
+
+	tcp_linearize(pkt);
 
 	tcp_csum(pkt);
 
