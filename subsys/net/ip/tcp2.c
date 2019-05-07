@@ -5,59 +5,9 @@
  */
 
 /*
- * This implementation of the TCP protocol is a proof of concept
- * of the following:
- *
- * Goal
- *
- * - Verifiable with the open source protocol test tools
- *
- * Implementation
- *
- * - State machine
- * - Separation of TCP control, data and retransmission mechanisms
- * - Whitelisting approach
- *
- * Sanity Check Suite
- *
- * Along with it, a TTCN-3 based sanity check suite is being developed:
- *
- * https://github.com/intel/net-test-suites/blob/master/src/tcp2_check.ttcnpp
- *
- * The sanity check is able to verify:
- *
- * - Control flow (active, passive connection establishment, termination)
- * - Retransmission
- * - Data
- *
- * To run the sanity check:
- *
- * 1. Compile and start the net-test-tools:
- *     https://github.com/intel/net-test-tools
- * 2. Compile and run samples/net/sockets/echo:
- *     # cmake -DBOARD=qemu_x86 \
- *       -DOVERLAY_CONFIG="overlay-tcp2.conf;overlay-tcp2-slip.conf" ..
- * 3. Compile and run the sanity check:
- *     https://github.com/intel/net-test-suites
- *     # ttcn3_start test_suite tcp2_check_3_runs.cfg
- *
- * NOTE: All modifications should pass the sanity check.
- *
- * To run with E1000 ethernet driver and to be able to smoke
- * test the connectivity from the host:
- *
- * 1. Get Zephyrproject's net-tools and create a pseudo interface:
- *     https://github.com/zephyrproject-rtos/net-tools
- *     # sudo ./net-setup.sh --config zeth.conf
- * 2. Compile and run samples/net/sockets/echo:
- *     # cmake -DBOARD=qemu_x86 \
- *       -DOVERLAY_CONFIG="overlay-tcp2.conf;overlay-tcp2-eth.conf" ..
- *    or
- *     # cmake -DBOARD=native_posix -DOVERLAY_CONFIG=overlay-tcp2.conf ..
- * 3. Connect with telnet:
- *     # telnet 192.0.2.1 4242
- *    or netcat:
- *     # nc 192.0.2.1 4242
+ * Manual:	https://github.com/ozhuraki/zephyr/blob/tcp2-dev/README.md
+ * TODO:	https://github.com/ozhuraki/zephyr/blob/tcp2-dev/TODO
+ * PR:		https://github.com/zephyrproject-rtos/zephyr/pull/11443/
  */
 
 #define LOG_LEVEL 4
