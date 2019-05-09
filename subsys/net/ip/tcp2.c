@@ -20,6 +20,7 @@ LOG_MODULE_REGISTER(net_tcp2);
 #include <zephyr.h>
 #include <json.h>
 #include <net/net_pkt.h>
+#include "tcp2.h"
 #include "tcp2_priv.h"
 
 static int tcp_rto = 500; /* Retransmission timeout, msec */
