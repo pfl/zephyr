@@ -19,6 +19,7 @@ LOG_MODULE_REGISTER(net_tcp2);
 #include <stdlib.h>
 #include <zephyr.h>
 #include <net/net_pkt.h>
+#include "tcp2.h"
 #include "tcp2_priv.h"
 #include "tp.h"
 
