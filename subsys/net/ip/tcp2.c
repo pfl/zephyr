@@ -78,6 +78,10 @@ static const char *basename(const char *path)
 									\
 	tcp_assert(is("tcp_in", (_seq)->func),				\
 			"Out of state machine sequence access");	\
+									\
+	tcp_assert((_seq)->req == 0 ||					\
+			(_seq)->old_value != (_seq)->value,		\
+			"Sequence nop");				\
 }
 
 static u32_t tp_seq_track(int kind, u32_t *pvalue, int req,
