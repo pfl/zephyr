@@ -69,9 +69,10 @@ static const char *basename(const char *path)
 
 #define tp_seq_dump(_seq)						\
 {									\
-	tcp_dbg("%s %u->%u (req: %d) %s:%d %s() %s",			\
+	tcp_dbg("%s %u->%u (%c%d) %s:%d %s() %s",			\
 		(_seq)->kind == TP_SEQ ? "SEQ" : "ACK",			\
-		(_seq)->old_value, (_seq)->value, (_seq)->req,		\
+		(_seq)->old_value, (_seq)->value,			\
+		(_seq)->req >= 0 ? '+' : '-', (_seq)->req,		\
 		(_seq)->file, (_seq)->line, (_seq)->func,		\
 		(_seq)->of ? "OF" : "");				\
 									\
