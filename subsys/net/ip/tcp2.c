@@ -67,6 +67,15 @@ static const char *basename(const char *path)
 	return file;
 }
 
+#define tp_seq_dump(_seq)						\
+{									\
+	tcp_dbg("%s %u->%u (req: %d) %s:%d %s() %s",			\
+		(_seq)->kind == TP_SEQ ? "SEQ" : "ACK",			\
+		(_seq)->old_value, (_seq)->value, (_seq)->req,		\
+		(_seq)->file, (_seq)->line, (_seq)->func,		\
+		(_seq)->of ? "OF" : "");				\
+}
+
 static u32_t tp_seq_track(int kind, u32_t *pvalue, int req,
 				const char *file, int line, const char *func)
 {
@@ -92,10 +101,7 @@ static u32_t tp_seq_track(int kind, u32_t *pvalue, int req,
 
 	sys_slist_append(&tp_seq, (sys_snode_t *) seq);
 
-	tcp_dbg("%s %u->%u (req: %d) %s:%d %s() %s",
-		seq->kind == TP_SEQ ? "SEQ" : "ACK",
-		seq->old_value, seq->value, seq->req,
-		seq->file, seq->line, seq->func, seq->of ? "OF" : "");
+	tp_seq_dump(seq);
 
 	return seq->value;
 }
@@ -105,10 +111,7 @@ void tp_seq_stat(void)
 	struct tp_seq *seq;
 
 	while ((seq = (struct tp_seq *) sys_slist_get(&tp_seq))) {
-		tcp_dbg("%s %u->%u (req: %d) %s:%d %s() %s",
-			seq->kind == TP_SEQ ? "SEQ" : "ACK",
-			seq->old_value, seq->value, seq->req,
-			seq->file, seq->line, seq->func, seq->of ? "OF" : "");
+		tp_seq_dump(seq);
 		k_free(seq);
 	}
 }
