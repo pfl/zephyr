@@ -1020,7 +1020,7 @@ static enum tp_type json_decode_msg(void *data, size_t data_len)
 		tcp_err("json_obj_parse()");
 	}
 #endif
-	tcp_dbg("msg=%s", tp.msg);
+	tcp_dbg("%s", tp.msg);
 
 	return tp.msg ? tp_msg_to_type(tp.msg) : TP_NONE;
 }
