@@ -174,8 +174,10 @@ struct tp_seq {
 	int line;
 	const char *func;
 	int kind;
+	int req;
 	u32_t value;
 	u32_t old_value;
+	int of;
 };
 
 struct tp_mem {
