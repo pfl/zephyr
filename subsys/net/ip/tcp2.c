@@ -70,24 +70,32 @@ static const char *basename(const char *path)
 static u32_t tp_seq_track(int kind, u32_t *pvalue, int req,
 				const char *file, int line, const char *func)
 {
-	struct tp_seq *seq = k_malloc(sizeof(struct tp_seq));
+	struct tp_seq *seq = k_calloc(1, sizeof(struct tp_seq));
 
-	seq->kind = kind;
 	seq->file = file;
 	seq->line = line;
 	seq->func = func;
 
+	seq->kind = kind;
+
+	seq->req = req;
 	seq->old_value = *pvalue;
 
-	*pvalue = *pvalue + req;
+	if (req > 0) {
+		seq->of = __builtin_uadd_overflow(seq->old_value, seq->req,
+							&seq->value);
+	} else {
+		seq->value += req;
+	}
 
-	seq->value = *pvalue;
+	*pvalue = seq->value;
 
 	sys_slist_append(&tp_seq, (sys_snode_t *) seq);
 
-	tcp_dbg("%s %u->%u %s:%d %s()", seq->kind == TP_SEQ ? "SEQ" : "ACK",
-		seq->old_value, seq->value,
-		seq->file, seq->line, seq->func);
+	tcp_dbg("%s %u->%u (req: %d) %s:%d %s() %s",
+		seq->kind == TP_SEQ ? "SEQ" : "ACK",
+		seq->old_value, seq->value, seq->req,
+		seq->file, seq->line, seq->func, seq->of ? "OF" : "");
 
 	return seq->value;
 }
@@ -97,10 +105,10 @@ void tp_seq_stat(void)
 	struct tp_seq *seq;
 
 	while ((seq = (struct tp_seq *) sys_slist_get(&tp_seq))) {
-		tcp_dbg("%s %u->%u %s:%d %s()",
+		tcp_dbg("%s %u->%u (req: %d) %s:%d %s() %s",
 			seq->kind == TP_SEQ ? "SEQ" : "ACK",
-			seq->old_value, seq->value,
-			seq->file, seq->line, seq->func);
+			seq->old_value, seq->value, seq->req,
+			seq->file, seq->line, seq->func, seq->of ? "OF" : "");
 		k_free(seq);
 	}
 }
