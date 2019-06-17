@@ -289,7 +289,7 @@ static void tp_pkt_unref(struct net_pkt *pkt, const char *file, int line)
 
 static struct sockaddr *sockaddr_new(struct net_pkt *pkt, int which)
 {
-	struct sockaddr *sa = tcp_malloc(sizeof(struct sockaddr));
+	struct sockaddr *sa = tcp_calloc(1, sizeof(struct sockaddr));
 	void *addr;
 	size_t len;
 
