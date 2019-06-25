@@ -37,7 +37,9 @@ static sys_slist_t tp_mem = SYS_SLIST_STATIC_INIT(&tp_mem);
 static sys_slist_t tp_seq = SYS_SLIST_STATIC_INIT(&tp_mem);
 static sys_slist_t tp_nbufs = SYS_SLIST_STATIC_INIT(&tp_nbufs);
 static sys_slist_t tp_pkts = SYS_SLIST_STATIC_INIT(&tp_pkts);
+#ifdef CONFIG_NET_TP
 static sys_slist_t tp_q = SYS_SLIST_STATIC_INIT(&tp_q);
+#endif
 
 static void tcp_in(struct tcp *conn, struct net_pkt *pkt);
 static void tcp_out(struct tcp *conn, u8_t th_flags, ...);
@@ -215,6 +217,7 @@ static void tp_nbuf_unref(struct net_buf *nbuf, const char *file, int line,
 	k_free(tp_nbuf);
 }
 
+#ifdef CONFIG_NET_TP
 static void tp_nbuf_stat(void)
 {
 	struct tp_nbuf *tp_nbuf;
@@ -224,6 +227,7 @@ static void tp_nbuf_stat(void)
 			tp_nbuf->nbuf->len);
 	}
 }
+#endif
 
 void tp_pkt_stat(void)
 {
@@ -809,6 +813,7 @@ static void net_pkt_adj(struct net_pkt *pkt, int req_len)
 	}
 }
 
+#ifdef CONFIG_NET_TP
 /* TODO: get rid of the internal static buffer */
 static const char *hex_to_str(void *data, size_t len)
 {
@@ -823,7 +828,9 @@ static const char *hex_to_str(void *data, size_t len)
 
 	return s;
 }
+#endif
 
+#ifdef CONFIG_NET_TP
 static enum tp_type tp_msg_to_type(const char *s)
 {
 	enum tp_type type = TP_NONE;
@@ -846,6 +853,7 @@ out:
 	tcp_assert(type != TP_NONE, "Invalid message: %s", s);
 	return type;
 }
+#endif
 
 static struct net_pkt *tp_make(void)
 {
@@ -904,6 +912,7 @@ static void tp_output(struct net_if *iface, void *data, size_t data_len)
 	tcp_pkt_send(NULL, pkt, false);
 }
 
+#ifdef CONFIG_NET_TP
 static void tcp_step(void)
 {
 	struct net_pkt *pkt = (void *) sys_slist_get(&tp_q);
@@ -919,7 +928,9 @@ static void tcp_step(void)
 		tcp_in(conn, pkt);
 	}
 }
+#endif
 
+#ifdef CONFIG_NET_TP
 static size_t str_to_hex(void *buf, size_t bufsize, const char *s)
 {
 	size_t i, j, len = strlen(s);
@@ -935,12 +946,14 @@ static size_t str_to_hex(void *buf, size_t bufsize, const char *s)
 
 	return j;
 }
+#endif
 
 #define json_str(_type, _field) \
 	JSON_OBJ_DESCR_PRIM(struct _type, _field, JSON_TOK_STRING)
 #define json_num(_type, _field) \
 	JSON_OBJ_DESCR_PRIM(struct _type, _field, JSON_TOK_NUMBER)
 
+#ifdef CONFIG_NET_TP
 static const struct json_obj_descr tp_descr[] = {
 	json_str(tp, msg),
 	json_str(tp, status),
@@ -951,7 +964,9 @@ static const struct json_obj_descr tp_descr[] = {
 	json_str(tp, data),
 	json_str(tp, op),
 };
+#endif
 
+#ifdef CONFIG_NET_TP
 static void tp_init(struct tcp *conn, struct tp *tp)
 {
 	struct tp out = {
@@ -967,7 +982,9 @@ static void tp_init(struct tcp *conn, struct tp *tp)
 
 	*tp = out;
 }
+#endif
 
+#ifdef CONFIG_NET_TP
 static void tp_encode(struct tp *tp, void *data, size_t *data_len)
 {
 	int error;
@@ -980,7 +997,9 @@ static void tp_encode(struct tp *tp, void *data, size_t *data_len)
 
 	*data_len = error ? 0 : strlen(data);
 }
+#endif
 
+#ifdef CONFIG_NET_TP
 static void tcp_to_json(struct tcp *conn, void *data, size_t *data_len)
 {
 	struct tp tp;
@@ -989,7 +1008,9 @@ static void tcp_to_json(struct tcp *conn, void *data, size_t *data_len)
 
 	tp_encode(&tp, data, data_len);
 }
+#endif
 
+#ifdef CONFIG_NET_TP
 static struct tp *json_to_tp(void *data, size_t data_len)
 {
 	static struct tp tp;
@@ -1005,15 +1026,19 @@ static struct tp *json_to_tp(void *data, size_t data_len)
 
 	return &tp;
 }
+#endif
 
 struct tp_msg {
 	const char *msg;
 };
 
+#ifdef CONFIG_NET_TP
 static const struct json_obj_descr tp_msg_dsc[] = {
 	JSON_OBJ_DESCR_PRIM(struct tp_msg, msg, JSON_TOK_STRING),
 };
+#endif
 
+#ifdef CONFIG_NET_TP
 static enum tp_type json_decode_msg(void *data, size_t data_len)
 {
 	int decoded;
@@ -1032,6 +1057,7 @@ static enum tp_type json_decode_msg(void *data, size_t data_len)
 
 	return tp.msg ? tp_msg_to_type(tp.msg) : TP_NONE;
 }
+#endif
 
 struct tp_entry {
 	const char *key;
@@ -1055,6 +1081,7 @@ static const struct json_obj_descr tp_new_dsc[] = {
 				 tp_entry_dsc, ARRAY_SIZE(tp_entry_dsc)),
 };
 
+#ifdef CONFIG_NET_TP
 static struct tp_new *json_to_tp_new(void *data, size_t data_len)
 {
 	static struct tp_new tp;
@@ -1075,6 +1102,7 @@ static struct tp_new *json_to_tp_new(void *data, size_t data_len)
 
 	return &tp;
 }
+#endif
 
 static void tp_new_to_json(struct tp_new *tp, void *data, size_t *data_len)
 {
@@ -1090,6 +1118,7 @@ static void tp_new_to_json(struct tp_new *tp, void *data, size_t *data_len)
 #define TP_BOOL	1
 #define TP_INT	2
 
+#ifdef CONFIG_NET_TP
 static void tp_new_find_and_apply(struct tp_new *tp, const char *key,
 					void *value, int type)
 {
@@ -1124,6 +1153,7 @@ static void tp_new_find_and_apply(struct tp_new *tp, const char *key,
 		}
 	}
 }
+#endif
 
 static void tp_out(struct tcp *conn, const char *msg, const char *key,
 			const char *value)
