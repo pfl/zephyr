@@ -506,7 +506,7 @@ static const char *tcp_th(struct tcp *conn, struct net_pkt *pkt)
 	}
 
 	if (data_len > 0) {
-		sprintf(s, ", len=%ld", data_len);
+		sprintf(s, ", len=%zd", data_len);
 	}
 
 	return buf;
