@@ -11,8 +11,13 @@
 extern "C" {
 #endif
 
+#include <sys/types.h>
+
 void tcp_input(struct net_pkt *pkt);
 void tp_input(struct net_pkt *pkt);
+
+ssize_t tcp_recv(int fd, void *buf, size_t len, int flags);
+ssize_t tcp_send(int fd, const void *buf, size_t len, int flags);
 
 #ifdef __cplusplus
 }
