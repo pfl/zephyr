@@ -41,10 +41,15 @@
 #define PKT_DST 0
 #define PKT_SRC 1
 
+#if IS_ENABLED(CONFIG_NET_TP)
 #define tcp_nbuf_alloc(_pool, _len) \
 	tp_nbuf_alloc(_pool, _len, basename(__FILE__), __LINE__, __func__)
 #define tcp_nbuf_unref(_nbuf) \
 	tp_nbuf_unref(_nbuf, basename(__FILE__), __LINE__, __func__)
+#else
+#define tcp_nbuf_alloc(_pool, _len) net_buf_alloc_len(_pool, _len, K_NO_WAIT)
+#define tcp_nbuf_unref(_nbuf) net_buf_unref(_nbuf)
+#endif
 
 #define tcp_pkt_alloc(_len) tp_pkt_alloc(_len, basename(__FILE__), __LINE__)
 #define tcp_pkt_clone(_pkt) tp_pkt_clone(_pkt, basename(__FILE__), __LINE__)
