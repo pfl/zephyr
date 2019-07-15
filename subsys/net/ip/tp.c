@@ -5,3 +5,4 @@
  */
 
 #include "tp.h"
+#include "tp_priv.h"
