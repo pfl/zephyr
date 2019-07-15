@@ -11,6 +11,10 @@
 extern "C" {
 #endif
 
+#include <net/net_pkt.h>
+
+void tp_input(struct net_pkt *pkt);
+
 #ifdef __cplusplus
 }
 #endif
