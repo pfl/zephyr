@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "tp.h"
+
 #define is(_a, _b) (strcmp((_a), (_b)) == 0)
 
 #define tcp_dbg(fmt, args...) printk("%s: " fmt "\n", __func__, ## args)
@@ -178,14 +180,6 @@ struct tp_seq {
 	u32_t value;
 	u32_t old_value;
 	int of;
-};
-
-struct tp_mem {
-	sys_snode_t next;
-	const char *file;
-	int line;
-	size_t size;
-	u8_t mem[];
 };
 
 struct tp_nbuf {

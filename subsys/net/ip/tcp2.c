@@ -33,7 +33,6 @@ static bool tp_tcp_echo;
 static bool tp_tcp_conn_delete = true;
 static bool tp_trace;
 
-static sys_slist_t tp_mem = SYS_SLIST_STATIC_INIT(&tp_mem);
 static sys_slist_t tp_seq = SYS_SLIST_STATIC_INIT(&tp_mem);
 static sys_slist_t tp_nbufs = SYS_SLIST_STATIC_INIT(&tp_nbufs);
 static sys_slist_t tp_pkts = SYS_SLIST_STATIC_INIT(&tp_pkts);
@@ -122,52 +121,6 @@ void tp_seq_stat(void)
 		tp_seq_dump(seq);
 		k_free(seq);
 	}
-}
-
-void tp_mem_stat(void)
-{
-	struct tp_mem *mem;
-
-	SYS_SLIST_FOR_EACH_CONTAINER(&tp_mem, mem, next) {
-		tcp_dbg("len=%zu %s:%d", mem->size, mem->file, mem->line);
-	}
-}
-
-void *tp_malloc(size_t size, const char *file, int line)
-{
-	struct tp_mem *mem = k_malloc(sizeof(struct tp_mem) + size);
-
-	mem->size = size;
-	mem->file = file;
-	mem->line = line;
-
-	sys_slist_append(&tp_mem, (sys_snode_t *) mem);
-
-	return &mem->mem;
-}
-
-void tp_free(void *ptr, const char *file, int line, const char *func)
-{
-	struct tp_mem *mem = (void *)((u8_t *) ptr - sizeof(struct tp_mem));
-
-	if (!sys_slist_find_and_remove(&tp_mem, (sys_snode_t *) mem)) {
-		tcp_assert(false, "%s:%d %s() Invalid free(%p)",
-				file, line, func, ptr);
-	}
-
-	memset(ptr, 0, mem->size);
-	k_free(mem);
-}
-
-void *tp_calloc(size_t nmemb, size_t size, const char *file, int line)
-{
-	size *= nmemb;
-
-	void *ptr = tp_malloc(size, file, line);
-
-	memset(ptr, 0, size);
-
-	return ptr;
 }
 
 static struct net_buf *tp_nbuf_alloc(size_t len, const char *file, int line,
