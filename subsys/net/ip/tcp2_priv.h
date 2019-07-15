@@ -27,10 +27,16 @@
 #define ip_get(_x) ((struct net_ipv4_hdr *) net_pkt_ip_data((_x)))
 #define th_get(_x) ((_x) ? ((struct tcphdr *) (ip_get(_x) + 1)) : NULL)
 
+#if IS_ENABLED(CONFIG_NET_TP)
 #define tcp_malloc(_size) tp_malloc(_size, basename(__FILE__), __LINE__)
 #define tcp_calloc(_nmemb, _size) \
 	tp_calloc(_nmemb, _size, basename(__FILE__), __LINE__)
 #define tcp_free(_ptr) tp_free(_ptr, basename(__FILE__), __LINE__, __func__)
+#else
+#define tcp_malloc(_size) k_malloc(_size)
+#define tcp_calloc(_nmemb, _size) k_calloc(_nmemb, _size)
+#define tcp_free(_ptr) k_free(_ptr)
+#endif
 
 #define PKT_DST 0
 #define PKT_SRC 1
