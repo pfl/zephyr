@@ -27,6 +27,11 @@ void tp_nbuf_unref(struct net_buf *nbuf, const char *file, int line,
 			const char *func);
 void tp_nbuf_stat(void);
 
+struct net_pkt *tp_pkt_alloc(size_t len, const char *file, int line);
+struct net_pkt *tp_pkt_clone(struct net_pkt *pkt, const char *file, int line);
+void tp_pkt_unref(struct net_pkt *pkt, const char *file, int line);
+void tp_pkt_stat(void);
+
 #ifdef __cplusplus
 }
 #endif

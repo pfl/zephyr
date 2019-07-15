@@ -42,6 +42,13 @@ struct tp_nbuf {
 	int line;
 };
 
+struct tp_pkt {
+	sys_snode_t next;
+	struct net_pkt *pkt;
+	const char *file;
+	int line;
+};
+
 #ifdef __cplusplus
 }
 #endif
