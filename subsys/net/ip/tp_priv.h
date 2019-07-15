@@ -35,6 +35,13 @@ struct tp_mem {
 	u8_t mem[];
 };
 
+struct tp_nbuf {
+	sys_snode_t next;
+	struct net_buf *nbuf;
+	const char *file;
+	int line;
+};
+
 #ifdef __cplusplus
 }
 #endif

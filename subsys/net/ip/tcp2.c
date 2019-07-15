@@ -34,9 +34,10 @@ static bool tp_tcp_conn_delete = true;
 static bool tp_trace;
 
 static sys_slist_t tp_seq = SYS_SLIST_STATIC_INIT(&tp_mem);
-static sys_slist_t tp_nbufs = SYS_SLIST_STATIC_INIT(&tp_nbufs);
 static sys_slist_t tp_pkts = SYS_SLIST_STATIC_INIT(&tp_pkts);
 static sys_slist_t tp_q = SYS_SLIST_STATIC_INIT(&tp_q);
+
+NET_BUF_POOL_DEFINE(tcp2_nbufs, 64/*count*/, 128/*size*/, 0, NULL);
 
 static void tcp_in(struct tcp *conn, struct net_pkt *pkt);
 static void tcp_out(struct tcp *conn, u8_t th_flags, ...);
@@ -50,8 +51,6 @@ static struct net_pkt *net_pkt_get(size_t len);
 
 ssize_t tcp_recv(int fd, void *buf, size_t len, int flags);
 ssize_t tcp_send(int fd, const void *buf, size_t len, int flags);
-
-NET_BUF_POOL_DEFINE(tcp2_nbufs, 64/*count*/, 128/*size*/, 0, NULL);
 
 static const char *basename(const char *path)
 {
@@ -120,61 +119,6 @@ void tp_seq_stat(void)
 	while ((seq = (struct tp_seq *) sys_slist_get(&tp_seq))) {
 		tp_seq_dump(seq);
 		k_free(seq);
-	}
-}
-
-static struct net_buf *tp_nbuf_alloc(size_t len, const char *file, int line,
-					const char *func)
-{
-	struct net_buf *nbuf = net_buf_alloc_len(&tcp2_nbufs, len, K_NO_WAIT);
-	struct tp_nbuf *tp_nbuf = k_malloc(sizeof(struct tp_nbuf));
-
-	tcp_assert(len, "");
-	tcp_assert(nbuf, "Out of nbufs");
-
-	tcp_dbg("size=%d %p %s:%d %s()", nbuf->size, nbuf,
-		basename(file), line, func);
-
-	tp_nbuf->nbuf = nbuf;
-	tp_nbuf->file = file;
-	tp_nbuf->line = line;
-
-	sys_slist_append(&tp_nbufs, (sys_snode_t *) tp_nbuf);
-
-	return nbuf;
-}
-
-static void tp_nbuf_unref(struct net_buf *nbuf, const char *file, int line,
-				const char *func)
-{
-	bool found = false;
-	struct tp_nbuf *tp_nbuf;
-
-	tcp_dbg("len=%d %p %s:%d %s()", nbuf->len, nbuf, file, line, func);
-
-	SYS_SLIST_FOR_EACH_CONTAINER(&tp_nbufs, tp_nbuf, next) {
-		if (tp_nbuf->nbuf == nbuf) {
-			found = true;
-			break;
-		}
-	}
-
-	tcp_assert(found, "Invalid tp_nbuf_unref(%p): %s:%d", nbuf, file, line);
-
-	sys_slist_find_and_remove(&tp_nbufs, (sys_snode_t *) tp_nbuf);
-
-	net_buf_unref(nbuf);
-
-	k_free(tp_nbuf);
-}
-
-static void tp_nbuf_stat(void)
-{
-	struct tp_nbuf *tp_nbuf;
-
-	SYS_SLIST_FOR_EACH_CONTAINER(&tp_nbufs, tp_nbuf, next) {
-		tcp_dbg("%s:%d len=%d", tp_nbuf->file, tp_nbuf->line,
-			tp_nbuf->nbuf->len);
 	}
 }
 
@@ -493,7 +437,7 @@ static void tcp_win_free(struct tcp_win *w)
 
 static void tcp_win_push(struct tcp_win *w, const void *data, size_t len)
 {
-	struct net_buf *buf = tcp_nbuf_alloc(len);
+	struct net_buf *buf = tcp_nbuf_alloc(&tcp2_nbufs, len);
 	size_t prev_len = w->len;
 
 	tcp_assert(len, "Zero length data");

@@ -21,6 +21,12 @@ void tp_free(void *ptr, const char *file, int line, const char *func);
 void *tp_calloc(size_t nmemb, size_t size, const char *file, int line);
 void tp_mem_stat(void);
 
+struct net_buf *tp_nbuf_alloc(struct net_buf_pool *pool, size_t len,
+				const char *file, int line, const char *func);
+void tp_nbuf_unref(struct net_buf *nbuf, const char *file, int line,
+			const char *func);
+void tp_nbuf_stat(void);
+
 #ifdef __cplusplus
 }
 #endif

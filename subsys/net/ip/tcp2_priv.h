@@ -41,8 +41,8 @@
 #define PKT_DST 0
 #define PKT_SRC 1
 
-#define tcp_nbuf_alloc(_len) \
-	tp_nbuf_alloc(_len, basename(__FILE__), __LINE__, __func__)
+#define tcp_nbuf_alloc(_pool, _len) \
+	tp_nbuf_alloc(_pool, _len, basename(__FILE__), __LINE__, __func__)
 #define tcp_nbuf_unref(_nbuf) \
 	tp_nbuf_unref(_nbuf, basename(__FILE__), __LINE__, __func__)
 
@@ -186,13 +186,6 @@ struct tp_seq {
 	u32_t value;
 	u32_t old_value;
 	int of;
-};
-
-struct tp_nbuf {
-	sys_snode_t next;
-	struct net_buf *nbuf;
-	const char *file;
-	int line;
 };
 
 struct tp_pkt {
