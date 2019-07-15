@@ -51,9 +51,28 @@
 #define tcp_nbuf_unref(_nbuf) net_buf_unref(_nbuf)
 #endif
 
+#if IS_ENABLED(CONFIG_NET_TP)
 #define tcp_pkt_alloc(_len) tp_pkt_alloc(_len, basename(__FILE__), __LINE__)
 #define tcp_pkt_clone(_pkt) tp_pkt_clone(_pkt, basename(__FILE__), __LINE__)
 #define tcp_pkt_unref(_pkt) tp_pkt_unref(_pkt, basename(__FILE__), __LINE__)
+#else
+static struct net_pkt *tcp_pkt_alloc(size_t len)
+{
+	struct net_pkt *pkt = net_pkt_alloc(K_NO_WAIT);
+	struct net_buf *nbuf = net_pkt_get_frag(pkt, K_NO_WAIT);
+
+	tcp_assert(pkt && nbuf, "");
+
+	pkt->family = AF_INET;
+
+	net_buf_add(nbuf, len);
+	net_pkt_frag_insert(pkt, nbuf);
+
+	return pkt;
+}
+#define tcp_pkt_clone(_pkt) net_pkt_clone(_pkt, K_NO_WAIT)
+#define tcp_pkt_unref(_pkt) net_pkt_unref(_pkt)
+#endif
 
 #define TP_SEQ 0
 #define TP_ACK 1

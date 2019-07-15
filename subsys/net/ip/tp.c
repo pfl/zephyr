@@ -112,7 +112,7 @@ void tp_nbuf_stat(void)
 	}
 }
 
-static struct net_pkt *net_pkt_get(size_t len)
+static struct net_pkt *tp_pkt_get(size_t len)
 {
 	struct net_pkt *pkt = net_pkt_alloc(K_NO_WAIT);
 	struct net_buf *nbuf = net_pkt_get_frag(pkt, K_NO_WAIT);
@@ -129,7 +129,7 @@ static struct net_pkt *net_pkt_get(size_t len)
 
 struct net_pkt *tp_pkt_alloc(size_t len, const char *file, int line)
 {
-	struct net_pkt *pkt = net_pkt_get(len);
+	struct net_pkt *pkt = tp_pkt_get(len);
 	struct tp_pkt *tp_pkt = k_malloc(sizeof(struct tp_pkt));
 
 	tp_assert(tp_pkt, "");
