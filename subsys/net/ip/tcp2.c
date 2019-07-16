@@ -32,7 +32,6 @@ static enum tp_type tp_state;
 static bool tp_tcp_echo;
 static bool tp_tcp_conn_delete = true;
 static bool tp_trace;
-
 static sys_slist_t tp_q = SYS_SLIST_STATIC_INIT(&tp_q);
 
 NET_BUF_POOL_DEFINE(tcp2_nbufs, 64/*count*/, 128/*size*/, 0, NULL);
@@ -48,19 +47,6 @@ static void tcp_win_free(struct tcp_win *win);
 
 ssize_t tcp_recv(int fd, void *buf, size_t len, int flags);
 ssize_t tcp_send(int fd, const void *buf, size_t len, int flags);
-
-static const char *basename(const char *path)
-{
-	char *file = (char *) path, *ch = file;
-
-	for (; *ch != '\0'; ch++) {
-		if (*ch == '/' || *ch == '\\') {
-			file = ch + 1;
-		}
-	}
-
-	return file;
-}
 
 static struct sockaddr *sockaddr_new(struct net_pkt *pkt, int which)
 {

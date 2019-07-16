@@ -28,6 +28,15 @@
 #define th_get(_x) ((_x) ? ((struct tcphdr *) (ip_get(_x) + 1)) : NULL)
 
 #if IS_ENABLED(CONFIG_NET_TP)
+static char *basename(char *path)
+{
+	char *filename = strrchr(path, '/');
+
+	return filename ? (filename + 1) : path;
+}
+#endif
+
+#if IS_ENABLED(CONFIG_NET_TP)
 #define tcp_malloc(_size) tp_malloc(_size, basename(__FILE__), __LINE__)
 #define tcp_calloc(_nmemb, _size) \
 	tp_calloc(_nmemb, _size, basename(__FILE__), __LINE__)
