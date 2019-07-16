@@ -74,12 +74,18 @@ static struct net_pkt *tcp_pkt_alloc(size_t len)
 #define tcp_pkt_unref(_pkt) net_pkt_unref(_pkt)
 #endif
 
+#if IS_ENABLED(CONFIG_NET_TP)
 #define conn_seq(_conn, _req) \
 	tp_seq_track(TP_SEQ, &(_conn)->seq, (_req), basename(__FILE__), \
 			__LINE__, __func__)
 #define conn_ack(_conn, _req) \
 	tp_seq_track(TP_ACK, &(_conn)->ack, (_req), basename(__FILE__), \
 			__LINE__, __func__)
+#else
+#define conn_seq(_conn, _req) (_conn)->seq += (_req)
+#define conn_ack(_conn, _req) (_conn)->ack += (_req)
+#endif
+
 struct tcphdr {
 	u16_t th_sport;
 	u16_t th_dport;
