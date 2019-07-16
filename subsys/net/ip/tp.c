@@ -11,7 +11,7 @@
 static sys_slist_t tp_mem = SYS_SLIST_STATIC_INIT(&tp_mem);
 static sys_slist_t tp_nbufs = SYS_SLIST_STATIC_INIT(&tp_nbufs);
 static sys_slist_t tp_pkts = SYS_SLIST_STATIC_INIT(&tp_pkts);
-static sys_slist_t tp_seq = SYS_SLIST_STATIC_INIT(&tp_mem);
+static sys_slist_t tp_seq = SYS_SLIST_STATIC_INIT(&tp_seq);
 
 void *tp_malloc(size_t size, const char *file, int line)
 {
