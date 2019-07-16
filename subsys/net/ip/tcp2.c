@@ -33,7 +33,6 @@ static bool tp_tcp_echo;
 static bool tp_tcp_conn_delete = true;
 static bool tp_trace;
 
-static sys_slist_t tp_seq = SYS_SLIST_STATIC_INIT(&tp_mem);
 static sys_slist_t tp_q = SYS_SLIST_STATIC_INIT(&tp_q);
 
 NET_BUF_POOL_DEFINE(tcp2_nbufs, 64/*count*/, 128/*size*/, 0, NULL);
@@ -61,63 +60,6 @@ static const char *basename(const char *path)
 	}
 
 	return file;
-}
-
-#define tp_seq_dump(_seq)						\
-{									\
-	tcp_dbg("%s %u->%u (%s%d) %s:%d %s() %s",			\
-		(_seq)->kind == TP_SEQ ? "SEQ" : "ACK",			\
-		(_seq)->old_value, (_seq)->value,			\
-		(_seq)->req >= 0 ? "+" : "", (_seq)->req,		\
-		(_seq)->file, (_seq)->line, (_seq)->func,		\
-		(_seq)->of ? "OF" : "");				\
-									\
-	tcp_assert(is("tcp_in", (_seq)->func),				\
-			"Out of state machine sequence access");	\
-									\
-	tcp_assert((_seq)->req == 0 ||					\
-			(_seq)->old_value != (_seq)->value,		\
-			"Sequence nop");				\
-}
-
-static u32_t tp_seq_track(int kind, u32_t *pvalue, int req,
-				const char *file, int line, const char *func)
-{
-	struct tp_seq *seq = k_calloc(1, sizeof(struct tp_seq));
-
-	seq->file = file;
-	seq->line = line;
-	seq->func = func;
-
-	seq->kind = kind;
-
-	seq->req = req;
-	seq->old_value = *pvalue;
-
-	if (req > 0) {
-		seq->of = __builtin_uadd_overflow(seq->old_value, seq->req,
-							&seq->value);
-	} else {
-		seq->value += req;
-	}
-
-	*pvalue = seq->value;
-
-	sys_slist_append(&tp_seq, (sys_snode_t *) seq);
-
-	tp_seq_dump(seq);
-
-	return seq->value;
-}
-
-void tp_seq_stat(void)
-{
-	struct tp_seq *seq;
-
-	while ((seq = (struct tp_seq *) sys_slist_get(&tp_seq))) {
-		tp_seq_dump(seq);
-		k_free(seq);
-	}
 }
 
 static struct sockaddr *sockaddr_new(struct net_pkt *pkt, int which)

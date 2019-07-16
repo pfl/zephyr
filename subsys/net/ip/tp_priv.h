@@ -11,7 +11,10 @@
 extern "C" {
 #endif
 
+#include <string.h>
 #include <zephyr.h>
+
+#define is(_a, _b) (strcmp((_a), (_b)) == 0)
 
 #define tp_dbg(fmt, args...) printk("%s: " fmt "\n", __func__, ## args)
 #define tp_err(fmt, args...) do {				\
@@ -47,6 +50,18 @@ struct tp_pkt {
 	struct net_pkt *pkt;
 	const char *file;
 	int line;
+};
+
+struct tp_seq {
+	sys_snode_t next;
+	const char *file;
+	int line;
+	const char *func;
+	int kind;
+	int req;
+	u32_t value;
+	u32_t old_value;
+	int of;
 };
 
 #ifdef __cplusplus
