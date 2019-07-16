@@ -132,8 +132,10 @@ static struct tcp *tcp_conn_search(struct net_pkt *pkt)
 	struct tcp *conn;
 
 	SYS_SLIST_FOR_EACH_CONTAINER(&tcp_conns, conn, next) {
-		if (tcp_conn_cmp(conn, pkt) == true) {
-			found = true;
+
+		found = tcp_conn_cmp(conn, pkt);
+
+		if (found) {
 			break;
 		}
 	}
