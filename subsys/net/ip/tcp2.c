@@ -198,27 +198,27 @@ static const char *tcp_th_flags(u8_t fl)
 	*s = '\0';
 
 	if (fl) {
-		if (fl & TH_SYN) {
+		if (fl & SYN) {
 			strcat(s, "SYN,");
 			s += 4;
 		}
-		if (fl & TH_FIN) {
+		if (fl & FIN) {
 			strcat(s, "FIN,");
 			s += 4;
 		}
-		if (fl & TH_ACK) {
+		if (fl & ACK) {
 			strcat(s, "ACK,");
 			s += 4;
 		}
-		if (fl & TH_PSH) {
+		if (fl & PSH) {
 			strcat(s, "PSH,");
 			s += 4;
 		}
-		if (fl & TH_RST) {
+		if (fl & RST) {
 			strcat(s, "RST,");
 			s += 4;
 		}
-		if (fl & TH_URG) {
+		if (fl & URG) {
 			strcat(s, "URG,");
 			s += 4;
 		}
@@ -241,24 +241,24 @@ static const char *tcp_th(struct tcp *conn, struct net_pkt *pkt)
 	*s = '\0';
 
 	if (fl) {
-		if (fl & TH_SYN) {
+		if (fl & SYN) {
 			s += sprintf(s, "SYN=%u,", th_seq(th));
 		}
-		if (fl & TH_FIN) {
+		if (fl & FIN) {
 			s += sprintf(s, "FIN=%u,", th_seq(th));
 		}
-		if (fl & TH_ACK) {
+		if (fl & ACK) {
 			s += sprintf(s, "ACK=%u,", th_ack(th));
 		}
-		if (fl & TH_PSH) {
+		if (fl & PSH) {
 			strcat(s, "PSH,");
 			s += 4;
 		}
-		if (fl & TH_RST) {
+		if (fl & RST) {
 			strcat(s, "RST,");
 			s += 4;
 		}
-		if (fl & TH_URG) {
+		if (fl & URG) {
 			strcat(s, "URG,");
 			s += 4;
 		}
@@ -1048,7 +1048,7 @@ static struct net_pkt *tcp_make(struct tcp *conn, u8_t th_flags)
 	th->th_dport = htons(conn->dport);
 	th->th_seq = htonl(conn->seq);
 
-	if (th_flags & TH_ACK) {
+	if (th_flags & ACK) {
 		th->th_ack = htonl(conn->ack);
 	}
 
@@ -1185,7 +1185,7 @@ static void tcp_out(struct tcp *conn, u8_t th_flags, ...)
 {
 	struct net_pkt *pkt = tcp_make(conn, th_flags);
 
-	if (th_flags & TH_PSH) {
+	if (th_flags & PSH) {
 		va_list ap;
 		ssize_t *data_len;
 		struct net_buf *data_out = tcp_win_pop(conn->snd,
@@ -1220,7 +1220,7 @@ static void tcp_out(struct tcp *conn, u8_t th_flags, ...)
 
 	tcp_dbg("%s", tcp_th(conn, pkt));
 
-	tcp_pkt_send(conn, pkt, th_flags & TH_SYN);
+	tcp_pkt_send(conn, pkt, th_flags & SYN);
 }
 
 static bool tp_tap_input(struct net_pkt *pkt)
@@ -1251,7 +1251,7 @@ void tcp_input(struct net_pkt *pkt)
 	}
 
 	conn = tcp_conn_search(pkt);
-	if (conn == NULL && th->th_flags == TH_SYN) {
+	if (conn == NULL && th->th_flags == SYN) {
 		conn = tcp_conn_new(pkt);
 	}
 

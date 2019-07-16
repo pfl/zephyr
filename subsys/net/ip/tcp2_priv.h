@@ -115,21 +115,13 @@ struct tcphdr {
 };
 
 enum th_flags {
-	TH_NONE = 0,
-	TH_FIN = 1,
-	TH_SYN = 1 << 1,
-	TH_RST = 1 << 2,
-	TH_PSH = 1 << 3,
-	TH_ACK = 1 << 4,
-	TH_URG = 1 << 5,
+	FIN = 1,
+	SYN = 1 << 1,
+	RST = 1 << 2,
+	PSH = 1 << 3,
+	ACK = 1 << 4,
+	URG = 1 << 5,
 };
-
-#define FIN TH_FIN /* drop the prefix in the above enum? */
-#define SYN TH_SYN
-#define RST TH_RST
-#define PSH TH_PSH
-#define ACK TH_ACK
-#define URG TH_URG
 
 enum tcp_state {
 	TCP_NONE = 0,
