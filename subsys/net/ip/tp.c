@@ -40,11 +40,10 @@ void tp_free(void *ptr, const char *file, int line, const char *func)
 
 void *tp_calloc(size_t nmemb, size_t size, const char *file, int line)
 {
-	size *= nmemb;
+	size_t bytes = size * nmemb;
+	void *ptr = tp_malloc(bytes, file, line);
 
-	void *ptr = tp_malloc(size, file, line);
-
-	memset(ptr, 0, size);
+	memset(ptr, 0, bytes);
 
 	return ptr;
 }
