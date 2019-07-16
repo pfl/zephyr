@@ -17,7 +17,42 @@ extern "C" {
 #define TP_SEQ 0
 #define TP_ACK 1
 
+enum tp_type { /* Test protocol message type */
+	TP_NONE = 0,
+	TP_COMMAND,
+	TP_CONFIG_REQUEST,
+	TP_CONFIG_REPLY,
+	TP_INTROSPECT_REQUEST,
+	TP_INTROSPECT_REPLY,
+	TP_INTROSPECT_MEMORY_REQUEST,
+	TP_INTROSPECT_MEMORY_REPLY,
+	TP_INTROSPECT_PACKETS_REQUEST,
+	TP_INTROSPECT_PACKETS_REPLY,
+	TP_DEBUG_STOP,
+	TP_DEBUG_STEP,
+	TP_DEBUG_CONTINUE,
+	TP_DEBUG_RESPONSE,
+	TP_DEBUG_BREAKPOINT_ADD,
+	TP_DEBUG_BREAKPOINT_DELETE,
+	TP_TRACE_ADD,
+	TP_TRACE_DELETE
+};
+
+struct tp {
+	enum tp_type type;
+	const char *msg;
+	const char *status;
+	const char *state;
+	int seq;
+	int ack;
+	const char *rcv;
+	const char *data;
+	const char *op;
+};
+
 void tp_input(struct net_pkt *pkt);
+
+enum tp_type tp_msg_to_type(const char *s);
 
 void *tp_malloc(size_t size, const char *file, int line);
 void tp_free(void *ptr, const char *file, int line, const char *func);

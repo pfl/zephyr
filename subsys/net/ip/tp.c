@@ -244,3 +244,30 @@ void tp_seq_stat(void)
 		k_free(seq);
 	}
 }
+
+enum tp_type tp_msg_to_type(const char *s)
+{
+	enum tp_type type = TP_NONE;
+
+#define is_tp(_s, _type) do {		\
+	if (is(#_type, _s)) {		\
+		type = _type;		\
+		goto out;		\
+	}				\
+} while (0)
+
+	is_tp(s, TP_COMMAND);
+	is_tp(s, TP_CONFIG_REQUEST);
+	is_tp(s, TP_INTROSPECT_REQUEST);
+	is_tp(s, TP_DEBUG_STOP);
+	is_tp(s, TP_DEBUG_STEP);
+	is_tp(s, TP_DEBUG_CONTINUE);
+
+#undef is_tp
+
+out:
+	tp_assert(type != TP_NONE, "Invalid message: %s", s);
+
+	return type;
+}
+
