@@ -109,30 +109,21 @@ static size_t sa_len(int af)
 		sizeof(struct sockaddr_in6);
 }
 
-static int tcp_addr_cmp(struct sockaddr *sa, struct net_pkt *pkt, int which)
+static bool tcp_addr_cmp(struct sockaddr *sa, struct net_pkt *pkt, int which)
 {
 	struct sockaddr *sa_new = sockaddr_new(pkt, which);
-	int ret = 0;
-
-	if (memcmp(sa, sa_new, sa_len(sa->sa_family)) != 0) {
-		ret = -1;
-	}
+	bool is_equal = memcmp(sa, sa_new, sa_len(sa->sa_family)) ?
+		false : true;
 
 	tcp_free(sa_new);
 
-	return ret;
+	return is_equal;
 }
 
-static int tcp_conn_cmp(struct tcp *conn, struct net_pkt *pkt)
+static bool tcp_conn_cmp(struct tcp *conn, struct net_pkt *pkt)
 {
-	int ret = 0;
-
-	if (tcp_addr_cmp(conn->src, pkt, PKT_DST) != 0 ||
-			tcp_addr_cmp(conn->dst, pkt, PKT_SRC) != 0) {
-		ret = -1;
-	}
-
-	return ret;
+	return tcp_addr_cmp(conn->src, pkt, PKT_DST) &&
+		tcp_addr_cmp(conn->dst, pkt, PKT_SRC);
 }
 
 static struct tcp *tcp_conn_search(struct net_pkt *pkt)
@@ -141,7 +132,7 @@ static struct tcp *tcp_conn_search(struct net_pkt *pkt)
 	struct tcp *conn;
 
 	SYS_SLIST_FOR_EACH_CONTAINER(&tcp_conns, conn, next) {
-		if (tcp_conn_cmp(conn, pkt) == 0) {
+		if (tcp_conn_cmp(conn, pkt) == true) {
 			found = true;
 			break;
 		}
