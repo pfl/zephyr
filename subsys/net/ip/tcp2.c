@@ -51,24 +51,26 @@ ssize_t tcp_send(int fd, const void *buf, size_t len, int flags);
 static struct sockaddr *sockaddr_new(struct net_pkt *pkt, int which)
 {
 	struct sockaddr *sa = tcp_calloc(1, sizeof(struct sockaddr));
-	void *addr;
-	size_t len;
 
 	sa->sa_family = net_pkt_family(pkt);
 
 	switch (sa->sa_family) {
 	case AF_INET: {
+		struct sockaddr_in *sin = (struct sockaddr_in *) sa;
 		struct net_ipv4_hdr *ip = ip_get(pkt);
-		len = sizeof(struct in_addr);
-		addr = (which == PKT_SRC) ? &ip->src : &ip->dst;
+		struct tcphdr *th = th_get(pkt);
+
+		sin->sin_port = (PKT_SRC == which) ?
+					th-> th_sport :th-> th_dport;
+		memcpy(&sin->sin_addr,
+			(PKT_SRC == which) ? &ip->src : &ip->dst,
+			sizeof(sin->sin_addr));
 		break;
 	}
 	case AF_INET6: default:
-		tcp_assert(false, "sa_family %u isn't implemented",
+		tcp_assert(false, "sa_family %u isn't supported yet",
 				sa->sa_family);
 	}
-
-	memcpy(&sa->data, addr, len);
 
 	return sa;
 }
@@ -123,12 +125,9 @@ static int tcp_addr_cmp(struct sockaddr *sa, struct net_pkt *pkt, int which)
 
 static int tcp_conn_cmp(struct tcp *conn, struct net_pkt *pkt)
 {
-	struct tcphdr *th = th_get(pkt);
 	int ret = 0;
 
-	if (conn->sport != ntohs(th->th_dport) ||
-			conn->dport != ntohs(th->th_sport) ||
-			tcp_addr_cmp(conn->src, pkt, PKT_DST) != 0 ||
+	if (tcp_addr_cmp(conn->src, pkt, PKT_DST) != 0 ||
 			tcp_addr_cmp(conn->dst, pkt, PKT_SRC) != 0) {
 		ret = -1;
 	}
