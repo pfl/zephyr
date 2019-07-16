@@ -6,6 +6,9 @@
 
 #include "tp.h"
 
+#define PKT_DST 0
+#define PKT_SRC 1
+
 #define is(_a, _b) (strcmp((_a), (_b)) == 0)
 
 #define tcp_dbg(fmt, args...) printk("%s: " fmt "\n", __func__, ## args)
@@ -46,9 +49,6 @@ static char *basename(char *path)
 #define tcp_calloc(_nmemb, _size) k_calloc(_nmemb, _size)
 #define tcp_free(_ptr) k_free(_ptr)
 #endif
-
-#define PKT_DST 0
-#define PKT_SRC 1
 
 #if IS_ENABLED(CONFIG_NET_TP)
 #define tcp_nbuf_alloc(_pool, _len) \
@@ -114,7 +114,6 @@ struct tcphdr {
 	u16_t th_urp;
 };
 
-
 enum th_flags {
 	TH_NONE = 0,
 	TH_FIN = 1,
@@ -157,7 +156,6 @@ struct tcp_win { /* TCP window */
 	size_t len;
 	sys_slist_t bufs;
 };
-
 
 struct tcp { /* TCP connection */
 	sys_snode_t next;
