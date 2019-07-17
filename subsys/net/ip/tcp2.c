@@ -887,8 +887,7 @@ static void tcp_to_json(struct tcp *conn, void *data, size_t *data_len)
 	tp_encode(&tp, data, data_len);
 }
 
-/* Test protolol input */
-void tp_input(struct net_pkt *pkt)
+bool tp_input(struct net_pkt *pkt)
 {
 	struct net_ipv4_hdr *ip = ip_get(pkt);
 	struct net_udp_hdr *uh = (void *) (ip + 1);
@@ -900,8 +899,8 @@ void tp_input(struct net_pkt *pkt)
 	enum tp_type type;
 	static char buf[512];
 
-	if (4242 != ntohs(uh->dst_port)) {
-		return;
+	if (ip->proto != IPPROTO_UDP || 4242 != ntohs(uh->dst_port)) {
+		return false;
 	}
 
 	net_pkt_skip(pkt, sizeof(*ip) + sizeof(*uh));
@@ -990,5 +989,7 @@ void tp_input(struct net_pkt *pkt)
 	if (json_len) {
 		tp_output(pkt->iface, buf, json_len);
 	}
+
+	return true;
 }
 #endif /* end of IS_ENABLED(CONFIG_NET_TP) */

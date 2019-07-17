@@ -105,7 +105,7 @@ static const struct json_obj_descr tp_new_dsc[] = {
 				 tp_entry_dsc, ARRAY_SIZE(tp_entry_dsc)),
 };
 
-void tp_input(struct net_pkt *pkt);
+bool tp_input(struct net_pkt *pkt);
 
 char *tp_basename(char *path);
 const char *tp_hex_to_str(void *data, size_t len);
@@ -155,7 +155,7 @@ bool tp_tap_input(struct net_pkt *pkt);
 #else /* else of IS_ENABLED(CONFIG_NET_TP) */
 
 #define tp_tap_input(_pkt) false
-#define tp_input()
+#define tp_input(_pkt) false
 #define tp_out(args...)
 
 #endif /* end of IS_ENABLED(CONFIG_NET_TP) */
