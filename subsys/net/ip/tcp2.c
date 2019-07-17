@@ -27,9 +27,6 @@ static int tcp_retries = 3;
 static int tcp_window = 1280; /* Receive window size */
 static sys_slist_t tcp_conns = SYS_SLIST_STATIC_INIT(&tcp_conns);
 
-static enum tp_type tp_state;
-static bool tp_tcp_echo;
-static bool tp_tcp_conn_delete = true;
 static sys_slist_t tp_q = SYS_SLIST_STATIC_INIT(&tp_q);
 
 NET_BUF_POOL_DEFINE(tcp2_nbufs, 64/*count*/, 128/*size*/, 0, NULL);
