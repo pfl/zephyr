@@ -173,7 +173,7 @@ out:
 	return prefix ? s : (s + 4);
 }
 
-static const char *tcp_th(struct tcp *conn, struct net_pkt *pkt)
+static const char *tcp_th(struct net_pkt *pkt)
 {
 #define FL_MAX 80
 	static char buf[FL_MAX];
@@ -329,7 +329,7 @@ static const char *tcp_conn_state(struct tcp *conn, struct net_pkt *pkt)
 
 	snprintf(s, MAX_S, "%s %s %u/%u", (pkt && net_pkt_get_len(pkt) >=
 		(sizeof(struct net_ipv4_hdr) + sizeof(struct tcphdr))) ?
-		tcp_th(conn, pkt) : "",
+		tcp_th(pkt) : "",
 		conn->state != TCP_NONE ? tcp_state_to_str(conn->state, false) :
 		"", conn->seq, conn->ack);
 
@@ -475,7 +475,7 @@ next_state:
 
 	if (th) {
 		tcp_assert(th->th_flags == 0, "Unconsumed flags: %s",
-				tcp_th(conn, pkt));
+				tcp_th(pkt));
 	}
 
 	if (next) {
@@ -604,7 +604,7 @@ static void tcp_csum(struct net_pkt *pkt)
 
 static void tcp_timer_subscribe(struct tcp *conn, struct net_pkt *pkt)
 {
-	tcp_dbg("%s", tcp_th(conn, pkt));
+	tcp_dbg("%s", tcp_th(pkt));
 
 	k_timer_user_data_set(&conn->timer, conn);
 
@@ -620,7 +620,7 @@ static void tcp_retransmit(struct k_timer *timer)
 
 	tcp_assert(pkt, "Empty retransmission queue");
 
-	tcp_dbg("%s", tcp_th(conn, pkt));
+	tcp_dbg("%s", tcp_th(pkt));
 
 	if (conn->retries > 0) {
 		tcp_pkt_send(conn, tcp_pkt_clone(pkt), false);
@@ -643,7 +643,7 @@ static void tcp_timer_cancel(struct tcp *conn)
 
 	pkt = CONTAINER_OF(pkt, struct net_pkt, next);
 
-	tcp_dbg("%s", pkt ? tcp_th(conn, pkt) : "");
+	tcp_dbg("%s", pkt ? tcp_th(pkt) : "");
 
 	tcp_pkt_unref(pkt);
 }
@@ -652,7 +652,7 @@ static void tcp_add_to_retransmit(struct tcp *conn, struct net_pkt *pkt)
 {
 	bool subscribe = sys_slist_is_empty(&conn->retr);
 
-	tcp_dbg("%s", tcp_th(conn, pkt));
+	tcp_dbg("%s", tcp_th(pkt));
 
 	sys_slist_append(&conn->retr, &pkt->next);
 
@@ -727,7 +727,7 @@ static void tcp_out(struct tcp *conn, u8_t th_flags, ...)
 
 	tcp_csum(pkt);
 
-	tcp_dbg("%s", tcp_th(conn, pkt));
+	tcp_dbg("%s", tcp_th(pkt));
 
 	tcp_pkt_send(conn, pkt, th_flags & SYN);
 }
