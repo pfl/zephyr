@@ -572,7 +572,6 @@ static void tcp_conn_delete(struct tcp *conn)
 
 	sys_slist_find_and_remove(&tcp_conns, (sys_snode_t *) conn);
 	tcp_free(conn);
-	tp_state = TP_NONE;
 }
 
 static struct net_pkt *tcp_make(struct tcp *conn, u8_t th_flags)
