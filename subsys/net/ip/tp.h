@@ -18,6 +18,9 @@ extern "C" {
 #define TP_SEQ 0
 #define TP_ACK 1
 
+#define TP_BOOL	1
+#define TP_INT	2
+
 enum tp_type { /* Test protocol message type */
 	TP_NONE = 0,
 	TP_COMMAND,
@@ -38,6 +41,8 @@ enum tp_type { /* Test protocol message type */
 	TP_TRACE_ADD,
 	TP_TRACE_DELETE
 };
+
+extern bool tp_trace;
 
 struct tp_msg {
 	const char *msg;
@@ -74,7 +79,6 @@ static const struct json_obj_descr tp_descr[] = {
 	json_str(tp, data),
 	json_str(tp, op),
 };
-
 
 struct tp_entry {
 	const char *key;
@@ -132,6 +136,16 @@ void tp_pkt_stat(void);
 u32_t tp_seq_track(int kind, u32_t *pvalue, int req,
 			const char *file, int line, const char *func);
 void tp_seq_stat(void);
+
+struct tp *json_to_tp(void *data, size_t data_len);
+enum tp_type json_decode_msg(void *data, size_t data_len);
+struct tp_new *json_to_tp_new(void *data, size_t data_len);
+void tp_encode(struct tp *tp, void *data, size_t *data_len);
+void tp_new_to_json(struct tp_new *tp, void *data, size_t *data_len);
+void tp_new_find_and_apply(struct tp_new *tp, const char *key, void *value,
+				int type);
+void tp_out(struct net_if *iface, const char *msg, const char *key,
+		const char *value);
 
 #ifdef __cplusplus
 }

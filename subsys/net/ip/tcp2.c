@@ -31,7 +31,6 @@ static sys_slist_t tcp_conns = SYS_SLIST_STATIC_INIT(&tcp_conns);
 static enum tp_type tp_state;
 static bool tp_tcp_echo;
 static bool tp_tcp_conn_delete = true;
-static bool tp_trace;
 static sys_slist_t tp_q = SYS_SLIST_STATIC_INIT(&tp_q);
 
 NET_BUF_POOL_DEFINE(tcp2_nbufs, 64/*count*/, 128/*size*/, 0, NULL);
@@ -588,19 +587,6 @@ static void tp_init(struct tcp *conn, struct tp *tp)
 	*tp = out;
 }
 
-static void tp_encode(struct tp *tp, void *data, size_t *data_len)
-{
-	int error;
-
-	error = json_obj_encode_buf(tp_descr, ARRAY_SIZE(tp_descr), tp,
-					data, *data_len);
-	if (error) {
-		tcp_err("json_obj_encode_buf()");
-	}
-
-	*data_len = error ? 0 : strlen(data);
-}
-
 static void tcp_to_json(struct tcp *conn, void *data, size_t *data_len)
 {
 	struct tp tp;
@@ -610,136 +596,11 @@ static void tcp_to_json(struct tcp *conn, void *data, size_t *data_len)
 	tp_encode(&tp, data, data_len);
 }
 
-static struct tp *json_to_tp(void *data, size_t data_len)
-{
-	static struct tp tp;
-
-	memset(&tp, 0, sizeof(tp));
-
-	if (json_obj_parse(data, data_len, tp_descr, ARRAY_SIZE(tp_descr),
-			&tp) < 0) {
-		tcp_err("json_obj_parse()");
-	}
-
-	tp.type = tp_msg_to_type(tp.msg);
-
-	return &tp;
-}
-
-static enum tp_type json_decode_msg(void *data, size_t data_len)
-{
-	int decoded;
-	struct tp_msg tp;
-
-	memset(&tp, 0, sizeof(tp));
-
-	decoded = json_obj_parse(data, data_len, tp_msg_dsc,
-					ARRAY_SIZE(tp_msg_dsc), &tp);
-#if 0
-	if ((decoded & 1) == false) { /* TODO: this fails, why? */
-		tcp_err("json_obj_parse()");
-	}
-#endif
-	tcp_dbg("%s", tp.msg);
-
-	return tp.msg ? tp_msg_to_type(tp.msg) : TP_NONE;
-}
-
-static struct tp_new *json_to_tp_new(void *data, size_t data_len)
-{
-	static struct tp_new tp;
-	int i;
-
-	memset(&tp, 0, sizeof(tp));
-
-	if (json_obj_parse(data, data_len, tp_new_dsc, ARRAY_SIZE(tp_new_dsc),
-				&tp) < 0) {
-		tcp_err("json_obj_parse()");
-	}
-
-	tcp_dbg("%s", tp.msg);
-
-	for (i = 0; i < tp.num_entries; i++) {
-		tcp_dbg("%s=%s", tp.data[i].key, tp.data[i].value);
-	}
-
-	return &tp;
-}
-
-static void tp_new_to_json(struct tp_new *tp, void *data, size_t *data_len)
-{
-	int error = json_obj_encode_buf(tp_new_dsc, ARRAY_SIZE(tp_new_dsc), tp,
-					data, *data_len);
-	if (error) {
-		tcp_err("json_obj_encode_buf()");
-	}
-
-	*data_len = error ? 0 : strlen(data);
-}
-
-#define TP_BOOL	1
-#define TP_INT	2
-
-static void tp_new_find_and_apply(struct tp_new *tp, const char *key,
-					void *value, int type)
-{
-	bool found = false;
-	int i;
-
-	for (i = 0; i < tp->num_entries; i++) {
-		if (is(key, tp->data[i].key)) {
-			found = true;
-			break;
-		}
-	}
-
-	if (found) {
-		switch (type) {
-		case TP_BOOL: {
-			bool new_value, old = *((bool *) value);
-			new_value = atoi(tp->data[i].value);
-			*((bool *) value) = new_value;
-			tcp_dbg("%s %d->%d", key, old, new_value);
-			break;
-		}
-		case TP_INT: {
-			int new_value, old_value = *((int *) value);
-			new_value = atoi(tp->data[i].value);
-			*((int *) value) = new_value;
-			tcp_dbg("%s %d->%d", key, old_value, new_value);
-			break;
-		}
-		default:
-			tcp_err("Unimplemented");
-		}
-	}
-}
-
-static void tp_out(struct tcp *conn, const char *msg, const char *key,
-			const char *value)
-{
-	if (tp_trace) {
-		size_t json_len;
-		static u8_t buf[128]; /* TODO: Merge all static buffers and
-					 eventually drop them */
-		struct tp_new tp = {
-			.msg = msg,
-			.data = { { .key = key, .value = value } },
-			.num_entries = 1
-		};
-		json_len = sizeof(buf);
-		tp_new_to_json(&tp, buf, &json_len);
-		if (json_len) {
-			tp_output(conn->iface, buf, json_len);
-		}
-	}
-}
-
 static void tcp_conn_delete(struct tcp *conn)
 {
 	tcp_dbg("");
 
-	tp_out(conn, "TP_TRACE", "event", "CONN_DELETE");
+	tp_out(conn->iface, "TP_TRACE", "event", "CONN_DELETE");
 
 	if (tp_tcp_conn_delete == false) {
 		return;

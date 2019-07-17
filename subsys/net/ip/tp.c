@@ -5,6 +5,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include "tp.h"
 #include "tp_priv.h"
 
@@ -12,6 +13,8 @@ static sys_slist_t tp_mem = SYS_SLIST_STATIC_INIT(&tp_mem);
 static sys_slist_t tp_nbufs = SYS_SLIST_STATIC_INIT(&tp_nbufs);
 static sys_slist_t tp_pkts = SYS_SLIST_STATIC_INIT(&tp_pkts);
 static sys_slist_t tp_seq = SYS_SLIST_STATIC_INIT(&tp_seq);
+
+bool tp_trace;
 
 char *tp_basename(char *path)
 {
@@ -374,4 +377,140 @@ void _tp_output(struct net_if *iface, void *data, size_t data_len,
 	pkt->iface = iface;
 
 	tp_pkt_send(pkt);
+}
+
+struct tp *json_to_tp(void *data, size_t data_len)
+{
+	static struct tp tp;
+
+	memset(&tp, 0, sizeof(tp));
+
+	if (json_obj_parse(data, data_len, tp_descr, ARRAY_SIZE(tp_descr),
+			&tp) < 0) {
+		tp_err("json_obj_parse()");
+	}
+
+	tp.type = tp_msg_to_type(tp.msg);
+
+	return &tp;
+}
+
+void tp_new_find_and_apply(struct tp_new *tp, const char *key, void *value,
+				int type)
+{
+	bool found = false;
+	int i;
+
+	for (i = 0; i < tp->num_entries; i++) {
+		if (is(key, tp->data[i].key)) {
+			found = true;
+			break;
+		}
+	}
+
+	if (found) {
+		switch (type) {
+		case TP_BOOL: {
+			bool new_value, old = *((bool *) value);
+			new_value = atoi(tp->data[i].value);
+			*((bool *) value) = new_value;
+			tp_dbg("%s %d->%d", key, old, new_value);
+			break;
+		}
+		case TP_INT: {
+			int new_value, old_value = *((int *) value);
+			new_value = atoi(tp->data[i].value);
+			*((int *) value) = new_value;
+			tp_dbg("%s %d->%d", key, old_value, new_value);
+			break;
+		}
+		default:
+			tp_err("Unimplemented");
+		}
+	}
+}
+
+enum tp_type json_decode_msg(void *data, size_t data_len)
+{
+	int decoded;
+	struct tp_msg tp;
+
+	memset(&tp, 0, sizeof(tp));
+
+	decoded = json_obj_parse(data, data_len, tp_msg_dsc,
+					ARRAY_SIZE(tp_msg_dsc), &tp);
+#if 0
+	if ((decoded & 1) == false) { /* TODO: this fails, why? */
+		tp_err("json_obj_parse()");
+	}
+#endif
+	tp_dbg("%s", tp.msg);
+
+	return tp.msg ? tp_msg_to_type(tp.msg) : TP_NONE;
+}
+
+struct tp_new *json_to_tp_new(void *data, size_t data_len)
+{
+	static struct tp_new tp;
+	int i;
+
+	memset(&tp, 0, sizeof(tp));
+
+	if (json_obj_parse(data, data_len, tp_new_dsc, ARRAY_SIZE(tp_new_dsc),
+				&tp) < 0) {
+		tp_err("json_obj_parse()");
+	}
+
+	tp_dbg("%s", tp.msg);
+
+	for (i = 0; i < tp.num_entries; i++) {
+		tp_dbg("%s=%s", tp.data[i].key, tp.data[i].value);
+	}
+
+	return &tp;
+}
+
+void tp_encode(struct tp *tp, void *data, size_t *data_len)
+{
+	int error;
+
+	error = json_obj_encode_buf(tp_descr, ARRAY_SIZE(tp_descr), tp,
+					data, *data_len);
+	if (error) {
+		tp_err("json_obj_encode_buf()");
+	}
+
+	*data_len = error ? 0 : strlen(data);
+}
+
+
+void tp_new_to_json(struct tp_new *tp, void *data, size_t *data_len)
+{
+	int error = json_obj_encode_buf(tp_new_dsc, ARRAY_SIZE(tp_new_dsc), tp,
+					data, *data_len);
+	if (error) {
+		tp_err("json_obj_encode_buf()");
+	}
+
+	*data_len = error ? 0 : strlen(data);
+}
+
+void tp_out(struct net_if *iface, const char *msg, const char *key,
+		const char *value)
+{
+	if (tp_trace) {
+		size_t json_len;
+		static u8_t buf[128]; /* TODO: Merge all static buffers and
+					 eventually drop them */
+		struct tp_new tp = {
+			.msg = msg,
+			.data = { { .key = key, .value = value } },
+			.num_entries = 1
+		};
+		json_len = sizeof(buf);
+		tp_new_to_json(&tp, buf, &json_len);
+		if (json_len) {
+			tp_output(iface, buf, json_len);
+		}
+	}
 }
