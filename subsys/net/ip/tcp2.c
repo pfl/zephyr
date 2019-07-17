@@ -173,44 +173,6 @@ out:
 	return prefix ? s : (s + 4);
 }
 
-static const char *tcp_th_flags(u8_t fl)
-{
-#define FL_MAX 80
-	static char buf[FL_MAX];
-	char *s = buf;
-	*s = '\0';
-
-	if (fl) {
-		if (fl & SYN) {
-			strcat(s, "SYN,");
-			s += 4;
-		}
-		if (fl & FIN) {
-			strcat(s, "FIN,");
-			s += 4;
-		}
-		if (fl & ACK) {
-			strcat(s, "ACK,");
-			s += 4;
-		}
-		if (fl & PSH) {
-			strcat(s, "PSH,");
-			s += 4;
-		}
-		if (fl & RST) {
-			strcat(s, "RST,");
-			s += 4;
-		}
-		if (fl & URG) {
-			strcat(s, "URG,");
-			s += 4;
-		}
-		s[strlen(s) - 1] = '\0';
-	}
-
-	return buf;
-}
-
 static const char *tcp_th(struct tcp *conn, struct net_pkt *pkt)
 {
 #define FL_MAX 80
@@ -513,7 +475,7 @@ next_state:
 
 	if (th) {
 		tcp_assert(th->th_flags == 0, "Unconsumed flags: %s",
-				tcp_th_flags(th->th_flags));
+				tcp_th(conn, pkt));
 	}
 
 	if (next) {
