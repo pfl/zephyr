@@ -25,6 +25,8 @@ LOG_MODULE_REGISTER(net_tcp2);
 static int tcp_rto = 500; /* Retransmission timeout, msec */
 static int tcp_retries = 3;
 static int tcp_window = 1280; /* Receive window size */
+static bool tcp_echo;
+
 static sys_slist_t tcp_conns = SYS_SLIST_STATIC_INIT(&tcp_conns);
 
 NET_BUF_POOL_DEFINE(tcp2_nbufs, 64/*count*/, 128/*size*/, 0, NULL);
@@ -479,7 +481,7 @@ next_state:
 			conn_ack(conn, + data_len);
 			tcp_out(conn, ACK); /* ack the data */
 
-			if (tp_tcp_echo) { /* TODO: Out of switch()? */
+			if (tcp_echo) { /* TODO: Out of switch()? */
 				tcp_win_push(conn->snd, data, data_len);
 				tcp_out(conn, PSH, &data_len);
 				conn_seq(conn, + data_len);
@@ -966,8 +968,7 @@ void tp_input(struct net_pkt *pkt)
 		tp_new_find_and_apply(tp_new, "tcp_window", &tcp_window,
 					TP_INT);
 		tp_new_find_and_apply(tp_new, "tp_trace", &tp_trace, TP_BOOL);
-		tp_new_find_and_apply(tp_new, "tcp_echo", &tp_tcp_echo,
-					TP_BOOL);
+		tp_new_find_and_apply(tp_new, "tcp_echo", &tcp_echo, TP_BOOL);
 		tp_new_find_and_apply(tp_new, "tp_tcp_conn_delete",
 					&tp_tcp_conn_delete, TP_BOOL);
 
