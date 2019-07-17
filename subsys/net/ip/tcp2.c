@@ -572,22 +572,6 @@ static void tcp_step(void)
 	}
 }
 
-#define json_str(_type, _field) \
-	JSON_OBJ_DESCR_PRIM(struct _type, _field, JSON_TOK_STRING)
-#define json_num(_type, _field) \
-	JSON_OBJ_DESCR_PRIM(struct _type, _field, JSON_TOK_NUMBER)
-
-static const struct json_obj_descr tp_descr[] = {
-	json_str(tp, msg),
-	json_str(tp, status),
-	json_str(tp, state),
-	json_num(tp, seq),
-	json_num(tp, ack),
-	json_str(tp, rcv),
-	json_str(tp, data),
-	json_str(tp, op),
-};
-
 static void tp_init(struct tcp *conn, struct tp *tp)
 {
 	struct tp out = {
@@ -642,14 +626,6 @@ static struct tp *json_to_tp(void *data, size_t data_len)
 	return &tp;
 }
 
-struct tp_msg {
-	const char *msg;
-};
-
-static const struct json_obj_descr tp_msg_dsc[] = {
-	JSON_OBJ_DESCR_PRIM(struct tp_msg, msg, JSON_TOK_STRING),
-};
-
 static enum tp_type json_decode_msg(void *data, size_t data_len)
 {
 	int decoded;
@@ -668,28 +644,6 @@ static enum tp_type json_decode_msg(void *data, size_t data_len)
 
 	return tp.msg ? tp_msg_to_type(tp.msg) : TP_NONE;
 }
-
-struct tp_entry {
-	const char *key;
-	const char *value;
-};
-
-static const struct json_obj_descr tp_entry_dsc[] = {
-	JSON_OBJ_DESCR_PRIM(struct tp_entry, key, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM(struct tp_entry, value, JSON_TOK_STRING),
-};
-
-struct tp_new {
-	const char *msg;
-	struct tp_entry data[10];
-	size_t num_entries;
-};
-
-static const struct json_obj_descr tp_new_dsc[] = {
-	JSON_OBJ_DESCR_PRIM(struct tp_new, msg, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_OBJ_ARRAY(struct tp_new, data, 10, num_entries,
-				 tp_entry_dsc, ARRAY_SIZE(tp_entry_dsc)),
-};
 
 static struct tp_new *json_to_tp_new(void *data, size_t data_len)
 {

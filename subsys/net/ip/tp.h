@@ -12,6 +12,7 @@ extern "C" {
 #endif
 
 #include <sys/types.h>
+#include <json.h>
 #include <net/net_pkt.h>
 
 #define TP_SEQ 0
@@ -38,6 +39,14 @@ enum tp_type { /* Test protocol message type */
 	TP_TRACE_DELETE
 };
 
+struct tp_msg {
+	const char *msg;
+};
+
+static const struct json_obj_descr tp_msg_dsc[] = {
+	JSON_OBJ_DESCR_PRIM(struct tp_msg, msg, JSON_TOK_STRING)
+};
+
 struct tp {
 	enum tp_type type;
 	const char *msg;
@@ -48,6 +57,45 @@ struct tp {
 	const char *rcv;
 	const char *data;
 	const char *op;
+};
+
+#define json_str(_type, _field) \
+	JSON_OBJ_DESCR_PRIM(struct _type, _field, JSON_TOK_STRING)
+#define json_num(_type, _field) \
+	JSON_OBJ_DESCR_PRIM(struct _type, _field, JSON_TOK_NUMBER)
+
+static const struct json_obj_descr tp_descr[] = {
+	json_str(tp, msg),
+	json_str(tp, status),
+	json_str(tp, state),
+	json_num(tp, seq),
+	json_num(tp, ack),
+	json_str(tp, rcv),
+	json_str(tp, data),
+	json_str(tp, op),
+};
+
+
+struct tp_entry {
+	const char *key;
+	const char *value;
+};
+
+static const struct json_obj_descr tp_entry_dsc[] = {
+	JSON_OBJ_DESCR_PRIM(struct tp_entry, key, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct tp_entry, value, JSON_TOK_STRING),
+};
+
+struct tp_new {
+	const char *msg;
+	struct tp_entry data[10];
+	size_t num_entries;
+};
+
+static const struct json_obj_descr tp_new_dsc[] = {
+	JSON_OBJ_DESCR_PRIM(struct tp_new, msg, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_OBJ_ARRAY(struct tp_new, data, 10, num_entries,
+				 tp_entry_dsc, ARRAY_SIZE(tp_entry_dsc)),
 };
 
 void tp_input(struct net_pkt *pkt);
