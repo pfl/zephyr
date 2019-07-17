@@ -531,18 +531,12 @@ next_state:
 	}
 }
 
-static void net_pkt_adj(struct net_pkt *pkt, int req_len)
+void tcp_pkt_adj(struct net_pkt *pkt, int req_len)
 {
 	struct net_ipv4_hdr *ip = ip_get(pkt);
 	u16_t len = ntohs(ip->len) + req_len;
 
 	ip->len = htons(len);
-
-	if (ip->proto == IPPROTO_UDP) {
-		struct net_udp_hdr *uh = (void *) (ip + 1);
-		len = ntohs(uh->len) + req_len;
-		uh->len = htons(len);
-	}
 }
 
 /* TODO: get rid of the internal static buffer */
@@ -560,30 +554,6 @@ static const char *hex_to_str(void *data, size_t len)
 	return s;
 }
 
-static struct net_pkt *tp_make(void)
-{
-	struct net_pkt *pkt = tcp_pkt_alloc(sizeof(struct net_ipv4_hdr) +
-					sizeof(struct net_udp_hdr));
-	struct net_ipv4_hdr *ip = ip_get(pkt);
-	struct net_udp_hdr *uh = (void *) (ip + 1);
-	size_t len = sizeof(*ip) + sizeof(*uh);
-
-	memset(ip, 0, len);
-
-	ip->vhl = 0x45;
-	ip->ttl = 64;
-	ip->proto = IPPROTO_UDP;
-	ip->len = htons(len);
-	net_addr_pton(AF_INET, CONFIG_NET_CONFIG_MY_IPV4_ADDR, &ip->src);
-	net_addr_pton(AF_INET, CONFIG_NET_CONFIG_PEER_IPV4_ADDR, &ip->dst);
-
-	uh->src_port = htons(4242);
-	uh->dst_port = htons(4242);
-	uh->len = htons(sizeof(*uh));
-
-	return pkt;
-}
-
 static void tcp_pkt_send(struct tcp *conn, struct net_pkt *pkt, bool retransmit)
 {
 	if (retransmit) {
@@ -599,22 +569,6 @@ static void tcp_pkt_send(struct tcp *conn, struct net_pkt *pkt, bool retransmit)
 	}
 
 	tcp_pkt_unref(pkt);
-}
-
-static void tp_output(struct net_if *iface, void *data, size_t data_len)
-{
-	struct net_pkt *pkt = tp_make();
-	struct net_buf *buf = net_pkt_get_frag(pkt, K_NO_WAIT);
-
-	memcpy(net_buf_add(buf, data_len), data, data_len);
-
-	net_pkt_frag_add(pkt, buf);
-
-	net_pkt_adj(pkt, data_len);
-
-	pkt->iface = iface;
-
-	tcp_pkt_send(NULL, pkt, false);
 }
 
 static void tcp_step(void)
@@ -1178,7 +1132,7 @@ static void tcp_out(struct tcp *conn, u8_t th_flags, ...)
 		}
 		/* TODO: There's a checksum problem with the following */
 		/*net_pkt_frag_add(pkt, data);*/
-		net_pkt_adj(pkt, len);
+		tcp_pkt_adj(pkt, len);
 	}
 
 	tcp_linearize(pkt);

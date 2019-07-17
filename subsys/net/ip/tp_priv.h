@@ -13,8 +13,7 @@ extern "C" {
 
 #include <string.h>
 #include <zephyr.h>
-
-#define is(_a, _b) (strcmp((_a), (_b)) == 0)
+#include <net/net_pkt.h>
 
 #define tp_dbg(fmt, args...) printk("%s: " fmt "\n", __func__, ## args)
 #define tp_err(fmt, args...) do {				\
@@ -29,6 +28,9 @@ extern "C" {
 		k_oops();					\
 	}							\
 } while (0)
+
+#define is(_a, _b) (strcmp((_a), (_b)) == 0)
+#define ip_get(_x) ((struct net_ipv4_hdr *) net_pkt_ip_data((_x)))
 
 struct tp_mem {
 	sys_snode_t next;

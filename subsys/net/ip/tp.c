@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <net/net_pkt.h>
 #include "tp.h"
 #include "tp_priv.h"
 
@@ -12,6 +11,13 @@ static sys_slist_t tp_mem = SYS_SLIST_STATIC_INIT(&tp_mem);
 static sys_slist_t tp_nbufs = SYS_SLIST_STATIC_INIT(&tp_nbufs);
 static sys_slist_t tp_pkts = SYS_SLIST_STATIC_INIT(&tp_pkts);
 static sys_slist_t tp_seq = SYS_SLIST_STATIC_INIT(&tp_seq);
+
+char *tp_basename(char *path)
+{
+	char *filename = strrchr(path, '/');
+
+	return filename ? (filename + 1) : path;
+}
 
 void *tp_malloc(size_t size, const char *file, int line)
 {
@@ -271,3 +277,69 @@ out:
 	return type;
 }
 
+static struct net_pkt *tp_make(const char *file, int line)
+{
+	struct net_pkt *pkt = tp_pkt_alloc(sizeof(struct net_ipv4_hdr) +
+						sizeof(struct net_udp_hdr),
+						file, line);
+	struct net_ipv4_hdr *ip = ip_get(pkt);
+	struct net_udp_hdr *uh = (void *) (ip + 1);
+	size_t len = sizeof(*ip) + sizeof(*uh);
+
+	memset(ip, 0, len);
+
+	ip->vhl = 0x45;
+	ip->ttl = 64;
+	ip->proto = IPPROTO_UDP;
+	ip->len = htons(len);
+	net_addr_pton(AF_INET, CONFIG_NET_CONFIG_MY_IPV4_ADDR, &ip->src);
+	net_addr_pton(AF_INET, CONFIG_NET_CONFIG_PEER_IPV4_ADDR, &ip->dst);
+
+	uh->src_port = htons(4242);
+	uh->dst_port = htons(4242);
+	uh->len = htons(sizeof(*uh));
+
+	return pkt;
+}
+
+static void tp_pkt_send(struct net_pkt *pkt)
+{
+	net_pkt_ref(pkt);
+
+	if (net_send_data(pkt) < 0) {
+		tp_err("net_send_data()");
+	}
+
+	tp_pkt_unref(pkt, tp_basename(__FILE__), __LINE__);
+}
+
+void tp_pkt_adj(struct net_pkt *pkt, int req_len)
+{
+	struct net_ipv4_hdr *ip = ip_get(pkt);
+	u16_t len = ntohs(ip->len) + req_len;
+
+	ip->len = htons(len);
+
+	if (ip->proto == IPPROTO_UDP) {
+		struct net_udp_hdr *uh = (void *) (ip + 1);
+		len = ntohs(uh->len) + req_len;
+		uh->len = htons(len);
+	}
+}
+
+void _tp_output(struct net_if *iface, void *data, size_t data_len,
+		const char *file, int line)
+{
+	struct net_pkt *pkt = tp_make(file, line);
+	struct net_buf *buf = net_pkt_get_frag(pkt, K_NO_WAIT);
+
+	memcpy(net_buf_add(buf, data_len), data, data_len);
+
+	net_pkt_frag_add(pkt, buf);
+
+	tp_pkt_adj(pkt, data_len);
+
+	pkt->iface = iface;
+
+	tp_pkt_send(pkt);
+}
