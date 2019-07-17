@@ -68,15 +68,11 @@ static struct sockaddr *sockaddr_new(struct net_pkt *pkt, int which)
 static struct tcp *tcp_conn_new(struct net_pkt *pkt)
 {
 	struct tcp *conn = tcp_calloc(1, sizeof(struct tcp));
-	struct tcphdr *th = th_get(pkt);
 
 	conn->win = tcp_window;
 
 	conn->src = sockaddr_new(pkt, PKT_DST);
 	conn->dst = sockaddr_new(pkt, PKT_SRC);
-
-	conn->sport = ntohs(th->th_dport);
-	conn->dport = ntohs(th->th_sport);
 
 	conn->iface = pkt->iface;
 
@@ -97,6 +93,13 @@ static size_t sa_len(int af)
 {
 	return (af == AF_INET) ? sizeof(struct sockaddr_in) :
 		sizeof(struct sockaddr_in6);
+}
+
+static u16_t sa_port(struct sockaddr *sa)
+{
+	return (sa->sa_family == AF_INET) ?
+		((struct sockaddr_in *) sa)->sin_port :
+		((struct sockaddr_in6 *) sa)->sin6_port;
 }
 
 static bool tcp_addr_cmp(struct sockaddr *sa, struct net_pkt *pkt, int which)
@@ -588,8 +591,8 @@ static struct net_pkt *tcp_make(struct tcp *conn, u8_t th_flags)
 	th->th_off = 5;
 	th->th_flags = th_flags;
 	th->th_win = htons(conn->win);
-	th->th_sport = htons(conn->sport);
-	th->th_dport = htons(conn->dport);
+	th->th_sport = sa_port(conn->src);
+	th->th_dport = sa_port(conn->dst);
 	th->th_seq = htonl(conn->seq);
 
 	if (th_flags & ACK) {

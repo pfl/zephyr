@@ -149,8 +149,6 @@ struct tcp { /* TCP connection */
 	u32_t ack;
 	struct sockaddr *src;
 	struct sockaddr *dst;
-	u16_t sport;
-	u16_t dport;
 	u16_t win;
 	struct tcp_win *rcv;
 	struct tcp_win *snd;
