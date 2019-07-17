@@ -46,7 +46,6 @@ enum tp_type { /* Test protocol message type */
 
 extern bool tp_trace;
 extern enum tp_type tp_state;
-extern bool tp_tcp_conn_delete;
 
 struct tp_msg {
 	const char *msg;

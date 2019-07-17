@@ -16,7 +16,6 @@ static sys_slist_t tp_seq = SYS_SLIST_STATIC_INIT(&tp_seq);
 
 bool tp_trace = false;
 enum tp_type tp_state = TP_NONE;
-bool tp_tcp_conn_delete = true;
 
 char *tp_basename(char *path)
 {

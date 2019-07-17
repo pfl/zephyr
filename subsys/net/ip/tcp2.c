@@ -26,6 +26,7 @@ static int tcp_rto = 500; /* Retransmission timeout, msec */
 static int tcp_retries = 3;
 static int tcp_window = 1280; /* Receive window size */
 static bool tcp_echo;
+static bool _tcp_conn_delete = true;
 
 static sys_slist_t tcp_conns = SYS_SLIST_STATIC_INIT(&tcp_conns);
 
@@ -557,7 +558,7 @@ static void tcp_conn_delete(struct tcp *conn)
 
 	tp_out(conn->iface, "TP_TRACE", "event", "CONN_DELETE");
 
-	if (tp_tcp_conn_delete == false) {
+	if (_tcp_conn_delete == false) {
 		return;
 	}
 
@@ -970,7 +971,7 @@ void tp_input(struct net_pkt *pkt)
 		tp_new_find_and_apply(tp_new, "tp_trace", &tp_trace, TP_BOOL);
 		tp_new_find_and_apply(tp_new, "tcp_echo", &tcp_echo, TP_BOOL);
 		tp_new_find_and_apply(tp_new, "tp_tcp_conn_delete",
-					&tp_tcp_conn_delete, TP_BOOL);
+					&_tcp_conn_delete, TP_BOOL);
 
 		break;
 	case TP_INTROSPECT_REQUEST:
