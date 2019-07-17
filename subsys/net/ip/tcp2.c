@@ -215,6 +215,8 @@ static const char *tcp_th(struct net_pkt *pkt)
 		sprintf(s, ", len=%ld", data_len);
 	}
 
+	tcp_assert(((bool)(fl & PSH)) == (data_len > 0),
+			"Invalid TCP packet: %s", buf);
 	return buf;
 }
 
