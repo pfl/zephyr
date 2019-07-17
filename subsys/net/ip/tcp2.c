@@ -138,14 +138,14 @@ static struct tcp *tcp_conn_search(struct net_pkt *pkt)
 
 static void tcp_retransmissions_flush(struct tcp *conn)
 {
-	sys_snode_t *node;
+	if (false == sys_slist_is_empty(&conn->retr)) {
+		sys_snode_t *node;
 
-	if (sys_slist_is_empty(&conn->retr) == false) {
 		k_timer_stop(&conn->timer);
-	}
 
-	while ((node = sys_slist_get(&conn->retr))) {
-		tcp_pkt_unref(CONTAINER_OF(node, struct net_pkt, next));
+		while ((node = sys_slist_get(&conn->retr))) {
+			tcp_pkt_unref(CONTAINER_OF(node, struct net_pkt, next));
+		}
 	}
 }
 
