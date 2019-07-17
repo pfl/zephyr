@@ -157,6 +157,7 @@ bool tp_tap_input(struct net_pkt *pkt);
 
 #define tp_tap_input(_pkt) false
 #define tp_input()
+#define tp_out(args...)
 
 #endif /* end of IS_ENABLED(CONFIG_NET_TP) */
 
