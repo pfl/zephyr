@@ -15,6 +15,8 @@ extern "C" {
 #include <json.h>
 #include <net/net_pkt.h>
 
+#if IS_ENABLED(CONFIG_NET_TP)
+
 #define TP_SEQ 0
 #define TP_ACK 1
 
@@ -149,6 +151,15 @@ void tp_new_find_and_apply(struct tp_new *tp, const char *key, void *value,
 				int type);
 void tp_out(struct net_if *iface, const char *msg, const char *key,
 		const char *value);
+
+bool tp_tap_input(struct net_pkt *pkt);
+
+#else /* else of IS_ENABLED(CONFIG_NET_TP) */
+
+#define tp_tap_input(_pkt) false
+#define tp_input()
+
+#endif /* end of IS_ENABLED(CONFIG_NET_TP) */
 
 #ifdef __cplusplus
 }

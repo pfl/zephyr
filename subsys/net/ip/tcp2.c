@@ -27,8 +27,6 @@ static int tcp_retries = 3;
 static int tcp_window = 1280; /* Receive window size */
 static sys_slist_t tcp_conns = SYS_SLIST_STATIC_INIT(&tcp_conns);
 
-static sys_slist_t tp_q = SYS_SLIST_STATIC_INIT(&tp_q);
-
 NET_BUF_POOL_DEFINE(tcp2_nbufs, 64/*count*/, 128/*size*/, 0, NULL);
 
 static void tcp_in(struct tcp *conn, struct net_pkt *pkt);
@@ -551,47 +549,6 @@ static void tcp_pkt_send(struct tcp *conn, struct net_pkt *pkt, bool retransmit)
 	tcp_pkt_unref(pkt);
 }
 
-static void tcp_step(void)
-{
-	struct net_pkt *pkt = (void *) sys_slist_get(&tp_q);
-	struct tcp *conn;
-
-	if (pkt) {
-		conn = tcp_conn_search(pkt);
-
-		if (conn == NULL) {
-			conn = tcp_conn_new(pkt);
-		}
-
-		tcp_in(conn, pkt);
-	}
-}
-
-static void tp_init(struct tcp *conn, struct tp *tp)
-{
-	struct tp out = {
-		.msg = "",
-		.status = "",
-		.state = tcp_state_to_str(conn->state, true),
-		.seq = conn->seq,
-		.ack = conn->ack,
-		.rcv = "",
-		.data = "",
-		.op = "",
-	};
-
-	*tp = out;
-}
-
-static void tcp_to_json(struct tcp *conn, void *data, size_t *data_len)
-{
-	struct tp tp;
-
-	tp_init(conn, &tp);
-
-	tp_encode(&tp, data, data_len);
-}
-
 static void tcp_conn_delete(struct tcp *conn)
 {
 	tcp_dbg("");
@@ -614,116 +571,6 @@ static void tcp_conn_delete(struct tcp *conn)
 	tcp_free(conn);
 	tp_state = TP_NONE;
 }
-
-#if defined CONFIG_NET_TP
-/* Test protolol input */
-void tp_input(struct net_pkt *pkt)
-{
-	struct net_ipv4_hdr *ip = ip_get(pkt);
-	struct net_udp_hdr *uh = (void *) (ip + 1);
-	size_t data_len = ntohs(uh->len) - sizeof(*uh);
-	struct tcp *conn = tcp_conn_search(pkt);
-	size_t json_len = 0;
-	struct tp *tp;
-	struct tp_new *tp_new;
-	enum tp_type type;
-	static char buf[512];
-
-	if (4242 != ntohs(uh->dst_port)) {
-		return;
-	}
-
-	net_pkt_skip(pkt, sizeof(*ip) + sizeof(*uh));
-	net_pkt_read(pkt, buf, data_len);
-	buf[data_len] = '\0';
-	data_len += 1;
-
-	type = json_decode_msg(buf, data_len);
-
-	data_len = ntohs(uh->len) - sizeof(*uh);
-	net_pkt_cursor_init(pkt);
-	net_pkt_skip(pkt, sizeof(*ip) + sizeof(*uh));
-	net_pkt_read(pkt, buf, data_len);
-	buf[data_len] = '\0';
-	data_len += 1;
-
-	switch (type) {
-	case TP_CONFIG_REQUEST:
-		tp_new = json_to_tp_new(buf, data_len);
-		break;
-	default:
-		tp = json_to_tp(buf, data_len);
-		break;
-	}
-
-	switch (type) {
-	case TP_COMMAND:
-		if (is("CONNECT", tp->op)) {
-			u8_t data_to_send[128];
-			size_t len = tp_str_to_hex(data_to_send,
-						sizeof(data_to_send), tp->data);
-			conn = tcp_conn_new(pkt);
-			conn->kind = TCP_ACTIVE;
-			if (len > 0) {
-				tcp_win_push(conn->snd, data_to_send, len);
-			}
-			tcp_in(conn, NULL);
-		}
-		if (is("CLOSE", tp->op)) {
-			tcp_conn_delete(tcp_conn_search(pkt));
-			tp_mem_stat();
-			tp_nbuf_stat();
-			tp_pkt_stat();
-			tp_seq_stat();
-		}
-		if (is("RECV", tp->op)) {
-			ssize_t len = tcp_recv(0, buf, sizeof(buf), 0);
-			tp_init(conn, tp);
-			tp->data = tp_hex_to_str(buf, len);
-			tcp_dbg("%zd = tcp_recv(\"%s\")", len, tp->data);
-			json_len = sizeof(buf);
-			tp_encode(tp, buf, &json_len);
-		}
-		if (is("SEND", tp->op)) {
-			ssize_t len = tp_str_to_hex(buf, sizeof(buf), tp->data);
-			tcp_dbg("tcp_send(\"%s\")", tp->data);
-			tcp_send(0, buf, len, 0);
-		}
-		break;
-	case TP_CONFIG_REQUEST:
-		tp_new_find_and_apply(tp_new, "tcp_rto", &tcp_rto, TP_INT);
-		tp_new_find_and_apply(tp_new, "tcp_retries", &tcp_retries,
-					TP_INT);
-		tp_new_find_and_apply(tp_new, "tcp_window", &tcp_window,
-					TP_INT);
-		tp_new_find_and_apply(tp_new, "tp_trace", &tp_trace, TP_BOOL);
-		tp_new_find_and_apply(tp_new, "tcp_echo", &tp_tcp_echo,
-					TP_BOOL);
-		tp_new_find_and_apply(tp_new, "tp_tcp_conn_delete",
-					&tp_tcp_conn_delete, TP_BOOL);
-
-		break;
-	case TP_INTROSPECT_REQUEST:
-		json_len = sizeof(buf);
-		tcp_to_json(conn, buf, &json_len);
-		break;
-	case TP_DEBUG_STOP: case TP_DEBUG_CONTINUE:
-		tp_state = tp->type;
-		break;
-	case TP_DEBUG_STEP:
-		tcp_step();
-		break;
-	default:
-		tcp_assert(false, "Unimplemented tp command: %s", tp->msg);
-	}
-
-	if (json_len) {
-		tp_output(pkt->iface, buf, json_len);
-	}
-}
-#else
-void tp_input(struct net_pkt *pkt) { }
-#endif
 
 static struct net_pkt *tcp_make(struct tcp *conn, u8_t th_flags)
 {
@@ -924,18 +771,6 @@ static void tcp_out(struct tcp *conn, u8_t th_flags, ...)
 	tcp_pkt_send(conn, pkt, th_flags & SYN);
 }
 
-static bool tp_tap_input(struct net_pkt *pkt)
-{
-	bool tap = tp_state != TP_NONE;
-
-	if (tap) {
-		net_pkt_ref(pkt);
-		/* STAILQ_INSERT_HEAD(&tp_q, pkt, stq_next); */
-	}
-
-	return tap;
-}
-
 void tcp_input(struct net_pkt *pkt)
 {
 	struct tcp *conn;
@@ -1005,3 +840,154 @@ void tcp_listen(void) { }
 void tcp_connect(void) { }
 void tcp_accept(void) { }
 void tcp_close(void) { }
+
+#if IS_ENABLED(CONFIG_NET_TP)
+static sys_slist_t tp_q = SYS_SLIST_STATIC_INIT(&tp_q);
+
+static void tcp_step(void)
+{
+	struct net_pkt *pkt = (void *) sys_slist_get(&tp_q);
+	struct tcp *conn;
+
+	if (pkt) {
+		conn = tcp_conn_search(pkt);
+
+		if (conn == NULL) {
+			conn = tcp_conn_new(pkt);
+		}
+
+		tcp_in(conn, pkt);
+	}
+}
+
+static void tp_init(struct tcp *conn, struct tp *tp)
+{
+	struct tp out = {
+		.msg = "",
+		.status = "",
+		.state = tcp_state_to_str(conn->state, true),
+		.seq = conn->seq,
+		.ack = conn->ack,
+		.rcv = "",
+		.data = "",
+		.op = "",
+	};
+
+	*tp = out;
+}
+
+static void tcp_to_json(struct tcp *conn, void *data, size_t *data_len)
+{
+	struct tp tp;
+
+	tp_init(conn, &tp);
+
+	tp_encode(&tp, data, data_len);
+}
+
+/* Test protolol input */
+void tp_input(struct net_pkt *pkt)
+{
+	struct net_ipv4_hdr *ip = ip_get(pkt);
+	struct net_udp_hdr *uh = (void *) (ip + 1);
+	size_t data_len = ntohs(uh->len) - sizeof(*uh);
+	struct tcp *conn = tcp_conn_search(pkt);
+	size_t json_len = 0;
+	struct tp *tp;
+	struct tp_new *tp_new;
+	enum tp_type type;
+	static char buf[512];
+
+	if (4242 != ntohs(uh->dst_port)) {
+		return;
+	}
+
+	net_pkt_skip(pkt, sizeof(*ip) + sizeof(*uh));
+	net_pkt_read(pkt, buf, data_len);
+	buf[data_len] = '\0';
+	data_len += 1;
+
+	type = json_decode_msg(buf, data_len);
+
+	data_len = ntohs(uh->len) - sizeof(*uh);
+	net_pkt_cursor_init(pkt);
+	net_pkt_skip(pkt, sizeof(*ip) + sizeof(*uh));
+	net_pkt_read(pkt, buf, data_len);
+	buf[data_len] = '\0';
+	data_len += 1;
+
+	switch (type) {
+	case TP_CONFIG_REQUEST:
+		tp_new = json_to_tp_new(buf, data_len);
+		break;
+	default:
+		tp = json_to_tp(buf, data_len);
+		break;
+	}
+
+	switch (type) {
+	case TP_COMMAND:
+		if (is("CONNECT", tp->op)) {
+			u8_t data_to_send[128];
+			size_t len = tp_str_to_hex(data_to_send,
+						sizeof(data_to_send), tp->data);
+			conn = tcp_conn_new(pkt);
+			conn->kind = TCP_ACTIVE;
+			if (len > 0) {
+				tcp_win_push(conn->snd, data_to_send, len);
+			}
+			tcp_in(conn, NULL);
+		}
+		if (is("CLOSE", tp->op)) {
+			tcp_conn_delete(tcp_conn_search(pkt));
+			tp_mem_stat();
+			tp_nbuf_stat();
+			tp_pkt_stat();
+			tp_seq_stat();
+		}
+		if (is("RECV", tp->op)) {
+			ssize_t len = tcp_recv(0, buf, sizeof(buf), 0);
+			tp_init(conn, tp);
+			tp->data = tp_hex_to_str(buf, len);
+			tcp_dbg("%zd = tcp_recv(\"%s\")", len, tp->data);
+			json_len = sizeof(buf);
+			tp_encode(tp, buf, &json_len);
+		}
+		if (is("SEND", tp->op)) {
+			ssize_t len = tp_str_to_hex(buf, sizeof(buf), tp->data);
+			tcp_dbg("tcp_send(\"%s\")", tp->data);
+			tcp_send(0, buf, len, 0);
+		}
+		break;
+	case TP_CONFIG_REQUEST:
+		tp_new_find_and_apply(tp_new, "tcp_rto", &tcp_rto, TP_INT);
+		tp_new_find_and_apply(tp_new, "tcp_retries", &tcp_retries,
+					TP_INT);
+		tp_new_find_and_apply(tp_new, "tcp_window", &tcp_window,
+					TP_INT);
+		tp_new_find_and_apply(tp_new, "tp_trace", &tp_trace, TP_BOOL);
+		tp_new_find_and_apply(tp_new, "tcp_echo", &tp_tcp_echo,
+					TP_BOOL);
+		tp_new_find_and_apply(tp_new, "tp_tcp_conn_delete",
+					&tp_tcp_conn_delete, TP_BOOL);
+
+		break;
+	case TP_INTROSPECT_REQUEST:
+		json_len = sizeof(buf);
+		tcp_to_json(conn, buf, &json_len);
+		break;
+	case TP_DEBUG_STOP: case TP_DEBUG_CONTINUE:
+		tp_state = tp->type;
+		break;
+	case TP_DEBUG_STEP:
+		tcp_step();
+		break;
+	default:
+		tcp_assert(false, "Unimplemented tp command: %s", tp->msg);
+	}
+
+	if (json_len) {
+		tp_output(pkt->iface, buf, json_len);
+	}
+}
+#endif /* end of IS_ENABLED(CONFIG_NET_TP) */

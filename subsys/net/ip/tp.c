@@ -517,3 +517,15 @@ void tp_out(struct net_if *iface, const char *msg, const char *key,
 		}
 	}
 }
+
+bool tp_tap_input(struct net_pkt *pkt)
+{
+	bool tap = tp_state != TP_NONE;
+
+	if (tap) {
+		net_pkt_ref(pkt);
+		/* STAILQ_INSERT_HEAD(&tp_q, pkt, stq_next); */
+	}
+
+	return tap;
+}
