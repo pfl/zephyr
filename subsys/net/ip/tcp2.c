@@ -19,7 +19,6 @@ LOG_MODULE_REGISTER(net_tcp2);
 #include <stdlib.h>
 #include <zephyr.h>
 #include <net/net_pkt.h>
-#include "tcp2.h"
 #include "tcp2_priv.h"
 
 static int tcp_rto = 500; /* Retransmission timeout, msec */
@@ -39,10 +38,6 @@ static void tcp_add_to_retransmit(struct tcp *conn, struct net_pkt *pkt);
 static void tcp_retransmit(struct k_timer *timer);
 static void tcp_timer_cancel(struct tcp *conn);
 static struct tcp_win *tcp_win_new(const char *name);
-static void tcp_win_free(struct tcp_win *win);
-
-ssize_t tcp_recv(int fd, void *buf, size_t len, int flags);
-ssize_t tcp_send(int fd, const void *buf, size_t len, int flags);
 
 static struct sockaddr *sockaddr_new(struct net_pkt *pkt, int which)
 {
@@ -58,13 +53,12 @@ static struct sockaddr *sockaddr_new(struct net_pkt *pkt, int which)
 
 		sin->sin_port = (PKT_SRC == which) ?
 					th-> th_sport :th-> th_dport;
-		memcpy(&sin->sin_addr,
-			(PKT_SRC == which) ? &ip->src : &ip->dst,
-			sizeof(sin->sin_addr));
+		memcpy(&sin->sin_addr, (PKT_SRC == which) ?
+			&ip->src : &ip->dst, sizeof(sin->sin_addr));
 		break;
 	}
 	case AF_INET6: default:
-		tcp_assert(false, "sa_family %u isn't supported yet",
+		tcp_assert(false, "sa_family %hu isn't supported yet",
 				sa->sa_family);
 	}
 
