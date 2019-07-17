@@ -53,6 +53,8 @@ struct tp {
 void tp_input(struct net_pkt *pkt);
 
 char *tp_basename(char *path);
+const char *tp_hex_to_str(void *data, size_t len);
+size_t tp_str_to_hex(void *buf, size_t bufsize, const char *s);
 
 void _tp_output(struct net_if *iface, void *data, size_t data_len,
 		const char *file, int line);

@@ -539,21 +539,6 @@ void tcp_pkt_adj(struct net_pkt *pkt, int req_len)
 	ip->len = htons(len);
 }
 
-/* TODO: get rid of the internal static buffer */
-static const char *hex_to_str(void *data, size_t len)
-{
-	static char s[512];
-	size_t i, j;
-
-	tcp_assert(len < sizeof(s), "Too small");
-
-	for (i = 0, j = 0; i < len; i++, j += 2) {
-		sprintf(&s[j], "%02x", *((u8_t *) data + i));
-	}
-
-	return s;
-}
-
 static void tcp_pkt_send(struct tcp *conn, struct net_pkt *pkt, bool retransmit)
 {
 	if (retransmit) {
@@ -585,22 +570,6 @@ static void tcp_step(void)
 
 		tcp_in(conn, pkt);
 	}
-}
-
-static size_t str_to_hex(void *buf, size_t bufsize, const char *s)
-{
-	size_t i, j, len = strlen(s);
-
-	tcp_assert((len % 2) == 0, "Invalid string: %s", s);
-
-	for (i = 0, j = 0; i < len; i += 2, j++) {
-
-		u8_t byte = (s[i] - '0') << 4 | (s[i + 1] - '0');
-
-		((u8_t *) buf)[j] = byte;
-	}
-
-	return j;
 }
 
 #define json_str(_type, _field) \
@@ -880,7 +849,7 @@ void tp_input(struct net_pkt *pkt)
 	case TP_COMMAND:
 		if (is("CONNECT", tp->op)) {
 			u8_t data_to_send[128];
-			size_t len = str_to_hex(data_to_send,
+			size_t len = tp_str_to_hex(data_to_send,
 						sizeof(data_to_send), tp->data);
 			conn = tcp_conn_new(pkt);
 			conn->kind = TCP_ACTIVE;
@@ -899,13 +868,13 @@ void tp_input(struct net_pkt *pkt)
 		if (is("RECV", tp->op)) {
 			ssize_t len = tcp_recv(0, buf, sizeof(buf), 0);
 			tp_init(conn, tp);
-			tp->data = hex_to_str(buf, len);
+			tp->data = tp_hex_to_str(buf, len);
 			tcp_dbg("%zd = tcp_recv(\"%s\")", len, tp->data);
 			json_len = sizeof(buf);
 			tp_encode(tp, buf, &json_len);
 		}
 		if (is("SEND", tp->op)) {
-			ssize_t len = str_to_hex(buf, sizeof(buf), tp->data);
+			ssize_t len = tp_str_to_hex(buf, sizeof(buf), tp->data);
 			tcp_dbg("tcp_send(\"%s\")", tp->data);
 			tcp_send(0, buf, len, 0);
 		}

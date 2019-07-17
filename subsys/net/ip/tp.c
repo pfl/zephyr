@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <stdio.h>
 #include "tp.h"
 #include "tp_priv.h"
 
@@ -17,6 +18,37 @@ char *tp_basename(char *path)
 	char *filename = strrchr(path, '/');
 
 	return filename ? (filename + 1) : path;
+}
+
+/* TODO: get rid of the internal static buffer */
+const char *tp_hex_to_str(void *data, size_t len)
+{
+	static char s[512];
+	size_t i, j;
+
+	tp_assert(len < sizeof(s), "Too small");
+
+	for (i = 0, j = 0; i < len; i++, j += 2) {
+		sprintf(&s[j], "%02x", *((u8_t *) data + i));
+	}
+
+	return s;
+}
+
+size_t tp_str_to_hex(void *buf, size_t bufsize, const char *s)
+{
+	size_t i, j, len = strlen(s);
+
+	tp_assert((len % 2) == 0, "Invalid string: %s", s);
+
+	for (i = 0, j = 0; i < len; i += 2, j++) {
+
+		u8_t byte = (s[i] - '0') << 4 | (s[i + 1] - '0');
+
+		((u8_t *) buf)[j] = byte;
+	}
+
+	return j;
 }
 
 void *tp_malloc(size_t size, const char *file, int line)
