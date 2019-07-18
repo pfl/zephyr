@@ -131,12 +131,13 @@ static struct tcp *tcp_conn_search(struct net_pkt *pkt)
 static void tcp_retransmissions_flush(struct tcp *conn)
 {
 	if (false == sys_slist_is_empty(&conn->retr)) {
-		sys_snode_t *node;
+		struct net_pkt *pkt;
 
 		k_timer_stop(&conn->timer);
 
-		while ((node = sys_slist_get(&conn->retr))) {
-			tcp_pkt_unref(CONTAINER_OF(node, struct net_pkt, next));
+		while ((pkt = tcp_slist(&conn->retr, get, struct net_pkt,
+					next))) {
+			tcp_pkt_unref(pkt);
 		}
 	}
 }
@@ -254,7 +255,6 @@ static void tcp_win_push(struct tcp_win *w, const void *data, size_t len)
 static struct net_buf *tcp_win_pop(struct tcp_win *w, size_t len)
 {
 	struct net_buf *buf, *out = NULL;
-	sys_snode_t *node;
 
 	tcp_assert(len, "Invalid request, len: %zu", len);
 
@@ -262,9 +262,7 @@ static struct net_buf *tcp_win_pop(struct tcp_win *w, size_t len)
 			"len: %zu, req: %zu", w->len, len);
 	while (len) {
 
-		node = sys_slist_get(&w->bufs);
-
-		buf = CONTAINER_OF(node, struct net_buf, next);
+		buf = tcp_slist(&w->bufs, get, struct net_buf, next);
 
 		w->len -= buf->len;
 
@@ -440,9 +438,8 @@ static void tcp_timer_subscribe(struct tcp *conn, struct net_pkt *pkt)
 static void tcp_retransmit(struct k_timer *timer)
 {
 	struct tcp *conn = k_timer_user_data_get(timer);
-	sys_snode_t *node =  sys_slist_peek_head(&conn->retr);
-	struct net_pkt *pkt = node ?
-		CONTAINER_OF(node, struct net_pkt, next) : NULL;
+	struct net_pkt *pkt = tcp_slist(&conn->retr, peek_head, struct net_pkt,
+					next);
 
 	tcp_assert(pkt, "Empty retransmission queue");
 
@@ -461,13 +458,11 @@ static void tcp_retransmit(struct k_timer *timer)
 
 static void tcp_timer_cancel(struct tcp *conn)
 {
-	struct net_pkt *pkt = (void *) sys_slist_get(&conn->retr);
+	struct net_pkt *pkt = tcp_slist(&conn->retr, get, struct net_pkt, next);
 
 	k_timer_stop(&conn->timer);
 
 	tcp_assert(pkt, "No packet in the retransmission queue");
-
-	pkt = CONTAINER_OF(pkt, struct net_pkt, next);
 
 	tcp_dbg("%s", pkt ? tcp_th(pkt) : "");
 
@@ -507,8 +502,7 @@ static void tcp_linearize(struct net_pkt *pkt)
 
 	buf = net_pkt_get_frag(pkt, K_NO_WAIT);
 
-	while ((tmp = (void *) sys_slist_get(&bufs))) {
-		tmp = CONTAINER_OF(tmp, struct net_buf, next);
+	while ((tmp = tcp_slist(&bufs, get, struct net_buf, next))) {
 		memcpy(net_buf_add(buf, tmp->len), tmp->data, tmp->len);
 		net_buf_unref(tmp);
 	}

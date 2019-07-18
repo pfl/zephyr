@@ -39,6 +39,15 @@
 	_th;							\
 })
 
+#define tcp_slist(_slist, _op, _type, _link)				\
+({									\
+	sys_snode_t *_node = sys_slist_##_op(_slist);			\
+									\
+	_type *_x = _node ? CONTAINER_OF(_node, _type, _link) : NULL;	\
+									\
+	_x;								\
+})
+
 #if IS_ENABLED(CONFIG_NET_TP)
 #define tcp_malloc(_size) \
 	tp_malloc(_size, tp_basename(__FILE__), __LINE__, __func__)
