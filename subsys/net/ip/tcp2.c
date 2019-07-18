@@ -189,16 +189,13 @@ static const char *tcp_th(struct net_pkt *pkt)
 			s += sprintf(s, "ACK=%u,", th_ack(th));
 		}
 		if (fl & PSH) {
-			strcat(s, "PSH,");
-			s += 4;
+			s += sprintf(s, "PSH,");
 		}
 		if (fl & RST) {
-			strcat(s, "RST,");
-			s += 4;
+			s += sprintf(s, "RST,");
 		}
 		if (fl & URG) {
-			strcat(s, "URG,");
-			s += 4;
+			s += sprintf(s, "URG,");
 		}
 		s[strlen(s) - 1] = '\0';
 		s--;
