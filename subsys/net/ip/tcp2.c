@@ -291,43 +291,6 @@ static struct net_buf *tcp_win_pop(struct tcp_win *w, size_t len)
 	return out;
 }
 
-/*
- * The following macros assume the presense of in the local context:
- *  - struct tcphdr *th: pointer to the TCP header
- *  - struct tcp *conn: pointer to the TCP connection
- */
-#define SEQ(_cond) (th && (th_seq(th) _cond conn->ack))
-
-static bool th_is_present(struct tcphdr *th, const u8_t fl, bool cond)
-{
-	bool present = false;
-
-	if (th && cond && (fl & th->th_flags)) {
-		th->th_flags &= ~fl;
-		present = true;
-	}
-
-	return present;
-}
-
-#define ON(_fl, _cond...) \
-	th_is_present(th, _fl, strlen("" #_cond) ? _cond : true)
-
-static bool th_is_equal(struct tcphdr *th, const u8_t fl, bool cond)
-{
-	bool equal = false;
-
-	if (th && cond && (fl == th->th_flags)) {
-		th->th_flags &= ~fl;
-		equal = true;
-	}
-
-	return equal;
-}
-
-#define EQ(_fl, _cond...) \
-	th_is_equal(th, _fl, strlen("" #_cond) ? _cond : true)
-
 static const char *tcp_conn_state(struct tcp *conn, struct net_pkt *pkt)
 {
 #define MAX_S 64
