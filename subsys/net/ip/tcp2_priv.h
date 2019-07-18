@@ -84,6 +84,13 @@ static struct net_pkt *tcp_pkt_alloc(size_t len)
 #define conn_ack(_conn, _req) (_conn)->ack += (_req)
 #endif
 
+#define conn_state(_conn, _s) do {				\
+	tcp_dbg("%s->%s",					\
+		tcp_state_to_str((_conn)->state, false),	\
+		tcp_state_to_str((_s), false));			\
+	(_conn)->state = _s;					\
+} while (0)
+
 enum pkt_addr {
 	SRC = 1,
 	DST = 0
