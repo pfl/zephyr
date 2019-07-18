@@ -320,7 +320,6 @@ void tcp_pkt_adj(struct net_pkt *pkt, int req_len)
 static void tcp_pkt_send(struct tcp *conn, struct net_pkt *pkt, bool retransmit)
 {
 	if (retransmit) {
-		tcp_assert(conn, "Invalid retransmit request");
 		tcp_add_to_retransmit(conn, tcp_pkt_clone(pkt));
 	}
 
@@ -445,12 +444,10 @@ static void tcp_retransmit(struct k_timer *timer)
 
 	tcp_dbg("%s", tcp_th(pkt));
 
-	if (conn->retries > 0) {
+	if (conn->retries-- > 0) {
 		tcp_pkt_send(conn, tcp_pkt_clone(pkt), false);
 
 		tcp_timer_subscribe(conn, pkt);
-
-		conn->retries--;
 	} else {
 		tcp_conn_delete(conn);
 	}
@@ -464,7 +461,7 @@ static void tcp_timer_cancel(struct tcp *conn)
 
 	tcp_assert(pkt, "No packet in the retransmission queue");
 
-	tcp_dbg("%s", pkt ? tcp_th(pkt) : "");
+	tcp_dbg("%s", tcp_th(pkt));
 
 	tcp_pkt_unref(pkt);
 }
