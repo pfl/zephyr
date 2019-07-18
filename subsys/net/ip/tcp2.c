@@ -685,9 +685,7 @@ static void tcp_out(struct tcp *conn, u8_t th_flags, ...)
 void tcp_input(struct net_pkt *pkt)
 {
 	struct tcp *conn;
-	struct tcphdr *th = (pkt && net_pkt_get_len(pkt) >=
-		(sizeof(struct net_ipv4_hdr) + sizeof(struct tcphdr))) ?
-		th_get(pkt) : NULL;
+	struct tcphdr *th = th_get(pkt);
 
 	if (tp_tap_input(pkt)) {
 		goto out;

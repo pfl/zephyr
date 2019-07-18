@@ -25,7 +25,19 @@
 #define th_seq(_x) ntohl((_x)->th_seq)
 #define th_ack(_x) ntohl((_x)->th_ack)
 #define ip_get(_x) ((struct net_ipv4_hdr *) net_pkt_ip_data((_x)))
-#define th_get(_x) ((_x) ? ((struct tcphdr *) (ip_get(_x) + 1)) : NULL)
+
+#define th_get(_pkt)						\
+({								\
+	struct tcphdr *_th = NULL;				\
+								\
+	if ((_pkt) && net_pkt_get_len(_pkt) >=			\
+			(sizeof(struct net_ipv4_hdr) +		\
+			sizeof(struct tcphdr))) {		\
+		_th = (struct tcphdr *) (ip_get(_pkt) + 1);	\
+	}							\
+								\
+	_th;							\
+})
 
 #if IS_ENABLED(CONFIG_NET_TP)
 #define tcp_malloc(_size) \
