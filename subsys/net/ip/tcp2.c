@@ -502,13 +502,12 @@ static void tcp_conn_delete(struct tcp *conn)
 	tcp_free(conn);
 }
 
-static struct net_pkt *tcp_make(struct tcp *conn, u8_t th_flags)
+static struct net_pkt *tcp_pkt_make(struct tcp *conn, u8_t flags)
 {
-	struct net_pkt *pkt = tcp_pkt_alloc(sizeof(struct net_ipv4_hdr) +
-						sizeof(struct tcphdr));
+	const size_t len = 40;
+	struct net_pkt *pkt = tcp_pkt_alloc(len);
 	struct net_ipv4_hdr *ip = ip_get(pkt);
 	struct tcphdr *th = (void *) (ip + 1);
-	size_t len = sizeof(*ip) + sizeof(*th);
 
 	memset(ip, 0, len);
 
@@ -520,13 +519,13 @@ static struct net_pkt *tcp_make(struct tcp *conn, u8_t th_flags)
 	net_addr_pton(AF_INET, CONFIG_NET_CONFIG_PEER_IPV4_ADDR, &ip->dst);
 
 	th->th_off = 5;
-	th->th_flags = th_flags;
+	th->th_flags = flags;
 	th->th_win = htons(conn->win);
 	th->th_sport = sa_port(conn->src);
 	th->th_dport = sa_port(conn->dst);
 	th->th_seq = htonl(conn->seq);
 
-	if (th_flags & ACK) {
+	if (ACK & flags) {
 		th->th_ack = htonl(conn->ack);
 	}
 
@@ -661,7 +660,7 @@ static void tcp_linearize(struct net_pkt *pkt)
 
 static void tcp_out(struct tcp *conn, u8_t th_flags, ...)
 {
-	struct net_pkt *pkt = tcp_make(conn, th_flags);
+	struct net_pkt *pkt = tcp_pkt_make(conn, th_flags);
 
 	if (th_flags & PSH) {
 		va_list ap;
