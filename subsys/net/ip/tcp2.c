@@ -267,8 +267,10 @@ static struct net_buf *tcp_win_pop(struct tcp_win *w, size_t len)
 	struct net_buf *buf, *out = NULL;
 	sys_snode_t *node;
 
-	tcp_assert(len <= w->len, "Insufficient window length");
+	tcp_assert(len, "Invalid request, len: %zu", len);
 
+	tcp_assert(len <= w->len, "Insufficient window length, "
+			"len: %zu, req: %zu", w->len, len);
 	while (len) {
 
 		node = sys_slist_get(&w->bufs);
@@ -281,6 +283,8 @@ static struct net_buf *tcp_win_pop(struct tcp_win *w, size_t len)
 
 		len -= buf->len;
 	}
+
+	tcp_assert(len == 0, "Unfulfilled request, len: %zu", len);
 
 	tcp_dbg("%s len=%zu", w->name, net_buf_frags_len(out));
 
