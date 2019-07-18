@@ -140,6 +140,12 @@ struct tcp_win { /* TCP window */
 	sys_slist_t bufs;
 };
 
+union tcp_endpoint {
+	struct sockaddr sa;
+	struct sockaddr_in sin;
+	struct sockaddr_in6 sin6;
+};
+
 struct tcp { /* TCP connection */
 	sys_snode_t next;
 	enum tcp_state state;
@@ -147,8 +153,8 @@ struct tcp { /* TCP connection */
 	int fd;
 	u32_t seq;
 	u32_t ack;
-	struct sockaddr *src;
-	struct sockaddr *dst;
+	union tcp_endpoint *src;
+	union tcp_endpoint *dst;
 	u16_t win;
 	struct tcp_win *rcv;
 	struct tcp_win *snd;

@@ -39,30 +39,30 @@ static void tcp_retransmit(struct k_timer *timer);
 static void tcp_timer_cancel(struct tcp *conn);
 static struct tcp_win *tcp_win_new(const char *name);
 
-static struct sockaddr *sockaddr_new(struct net_pkt *pkt, int which)
+static union tcp_endpoint *tcp_endpoint_new(struct net_pkt *pkt, int which)
 {
-	struct sockaddr *sa = tcp_calloc(1, sizeof(struct sockaddr));
+	union tcp_endpoint *ep = tcp_calloc(1, sizeof(union tcp_endpoint));
 
-	sa->sa_family = net_pkt_family(pkt);
+	ep->sa.sa_family = net_pkt_family(pkt);
 
-	switch (sa->sa_family) {
+	switch (ep->sa.sa_family) {
 	case AF_INET: {
-		struct sockaddr_in *sin = (struct sockaddr_in *) sa;
 		struct net_ipv4_hdr *ip = ip_get(pkt);
 		struct tcphdr *th = th_get(pkt);
 
-		sin->sin_port = (PKT_SRC == which) ?
-					th-> th_sport :th-> th_dport;
-		memcpy(&sin->sin_addr, (PKT_SRC == which) ?
-			&ip->src : &ip->dst, sizeof(sin->sin_addr));
+		ep->sin.sin_port = (PKT_SRC == which) ?
+					th->th_sport : th->th_dport;
+
+		ep->sin.sin_addr = (PKT_SRC == which) ? ip->src : ip->dst;
+
 		break;
 	}
 	case AF_INET6: default:
 		tcp_assert(false, "sa_family %hu isn't supported yet",
-				sa->sa_family);
+				ep->sa.sa_family);
 	}
 
-	return sa;
+	return ep;
 }
 
 static struct tcp *tcp_conn_new(struct net_pkt *pkt)
@@ -71,8 +71,8 @@ static struct tcp *tcp_conn_new(struct net_pkt *pkt)
 
 	conn->win = tcp_window;
 
-	conn->src = sockaddr_new(pkt, PKT_DST);
-	conn->dst = sockaddr_new(pkt, PKT_SRC);
+	conn->src = tcp_endpoint_new(pkt, PKT_DST);
+	conn->dst = tcp_endpoint_new(pkt, PKT_SRC);
 
 	conn->iface = pkt->iface;
 
@@ -89,34 +89,28 @@ static struct tcp *tcp_conn_new(struct net_pkt *pkt)
 	return conn;
 }
 
-static size_t sa_len(int af)
+static size_t tcp_endpoint_len(union tcp_endpoint *ep)
 {
-	return (af == AF_INET) ? sizeof(struct sockaddr_in) :
+	return (ep->sa.sa_family == AF_INET) ? sizeof(struct sockaddr_in) :
 		sizeof(struct sockaddr_in6);
 }
 
-static u16_t sa_port(struct sockaddr *sa)
+static bool tcp_endpoint_cmp(union tcp_endpoint *ep, struct net_pkt *pkt,
+				int which)
 {
-	return (sa->sa_family == AF_INET) ?
-		((struct sockaddr_in *) sa)->sin_port :
-		((struct sockaddr_in6 *) sa)->sin6_port;
-}
-
-static bool tcp_addr_cmp(struct sockaddr *sa, struct net_pkt *pkt, int which)
-{
-	struct sockaddr *sa_new = sockaddr_new(pkt, which);
-	bool is_equal = memcmp(sa, sa_new, sa_len(sa->sa_family)) ?
+	union tcp_endpoint *ep_new = tcp_endpoint_new(pkt, which);
+	bool is_equal = memcmp(ep, ep_new, tcp_endpoint_len(ep)) ?
 		false : true;
 
-	tcp_free(sa_new);
+	tcp_free(ep_new);
 
 	return is_equal;
 }
 
 static bool tcp_conn_cmp(struct tcp *conn, struct net_pkt *pkt)
 {
-	return tcp_addr_cmp(conn->src, pkt, PKT_DST) &&
-		tcp_addr_cmp(conn->dst, pkt, PKT_SRC);
+	return tcp_endpoint_cmp(conn->src, pkt, PKT_DST) &&
+		tcp_endpoint_cmp(conn->dst, pkt, PKT_SRC);
 }
 
 static struct tcp *tcp_conn_search(struct net_pkt *pkt)
@@ -515,14 +509,16 @@ static struct net_pkt *tcp_pkt_make(struct tcp *conn, u8_t flags)
 	ip->ttl = 64;
 	ip->proto = IPPROTO_TCP;
 	ip->len = htons(len);
-	net_addr_pton(AF_INET, CONFIG_NET_CONFIG_MY_IPV4_ADDR, &ip->src);
-	net_addr_pton(AF_INET, CONFIG_NET_CONFIG_PEER_IPV4_ADDR, &ip->dst);
+
+	ip->src = conn->src->sin.sin_addr;
+	ip->dst = conn->dst->sin.sin_addr;
+
+	th->th_sport = conn->src->sin.sin_port;
+	th->th_dport = conn->dst->sin.sin_port;
 
 	th->th_off = 5;
 	th->th_flags = flags;
 	th->th_win = htons(conn->win);
-	th->th_sport = sa_port(conn->src);
-	th->th_dport = sa_port(conn->dst);
 	th->th_seq = htonl(conn->seq);
 
 	if (ACK & flags) {
