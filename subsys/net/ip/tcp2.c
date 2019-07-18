@@ -283,17 +283,14 @@ static struct net_buf *tcp_win_pop(struct tcp_win *w, size_t len)
 
 static const char *tcp_conn_state(struct tcp *conn, struct net_pkt *pkt)
 {
-#define MAX_S 64
-	static char s[MAX_S];
+#define BUF_SIZE 64
+	static char buf[BUF_SIZE];
 
-	snprintf(s, MAX_S, "%s %s %u/%u", (pkt && net_pkt_get_len(pkt) >=
-		(sizeof(struct net_ipv4_hdr) + sizeof(struct tcphdr))) ?
-		tcp_th(pkt) : "",
-		conn->state != TCP_NONE ? tcp_state_to_str(conn->state, false) :
-		"", conn->seq, conn->ack);
-
-	return s;
-#undef MAX_S
+	snprintf(buf, BUF_SIZE, "%s %s %u/%u", pkt ? tcp_th(pkt) : "",
+			tcp_state_to_str(conn->state, false),
+			conn->seq, conn->ack);
+#undef BUF_SIZE
+	return buf;
 }
 
 static ssize_t tcp_data_get(struct net_pkt *pkt, void **data, ssize_t *data_len)
