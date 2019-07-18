@@ -6,9 +6,6 @@
 
 #include "tp.h"
 
-#define PKT_DST 0
-#define PKT_SRC 1
-
 #define is(_a, _b) (strcmp((_a), (_b)) == 0)
 
 #define tcp_dbg(fmt, args...) printk("%s: " fmt "\n", __func__, ## args)
@@ -85,6 +82,11 @@ static struct net_pkt *tcp_pkt_alloc(size_t len)
 #define conn_seq(_conn, _req) (_conn)->seq += (_req)
 #define conn_ack(_conn, _req) (_conn)->ack += (_req)
 #endif
+
+enum pkt_addr {
+	SRC = 1,
+	DST = 0
+};
 
 struct tcphdr {
 	u16_t th_sport;

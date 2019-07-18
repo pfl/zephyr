@@ -39,7 +39,7 @@ static void tcp_retransmit(struct k_timer *timer);
 static void tcp_timer_cancel(struct tcp *conn);
 static struct tcp_win *tcp_win_new(const char *name);
 
-static union tcp_endpoint *tcp_endpoint_new(struct net_pkt *pkt, int which)
+static union tcp_endpoint *tcp_endpoint_new(struct net_pkt *pkt, int src)
 {
 	union tcp_endpoint *ep = tcp_calloc(1, sizeof(union tcp_endpoint));
 
@@ -50,10 +50,9 @@ static union tcp_endpoint *tcp_endpoint_new(struct net_pkt *pkt, int which)
 		struct net_ipv4_hdr *ip = ip_get(pkt);
 		struct tcphdr *th = th_get(pkt);
 
-		ep->sin.sin_port = (PKT_SRC == which) ?
-					th->th_sport : th->th_dport;
+		ep->sin.sin_port = src ? th->th_sport : th->th_dport;
 
-		ep->sin.sin_addr = (PKT_SRC == which) ? ip->src : ip->dst;
+		ep->sin.sin_addr = src ? ip->src : ip->dst;
 
 		break;
 	}
@@ -71,8 +70,8 @@ static struct tcp *tcp_conn_new(struct net_pkt *pkt)
 
 	conn->win = tcp_window;
 
-	conn->src = tcp_endpoint_new(pkt, PKT_DST);
-	conn->dst = tcp_endpoint_new(pkt, PKT_SRC);
+	conn->src = tcp_endpoint_new(pkt, DST);
+	conn->dst = tcp_endpoint_new(pkt, SRC);
 
 	conn->iface = pkt->iface;
 
@@ -109,8 +108,8 @@ static bool tcp_endpoint_cmp(union tcp_endpoint *ep, struct net_pkt *pkt,
 
 static bool tcp_conn_cmp(struct tcp *conn, struct net_pkt *pkt)
 {
-	return tcp_endpoint_cmp(conn->src, pkt, PKT_DST) &&
-		tcp_endpoint_cmp(conn->dst, pkt, PKT_SRC);
+	return tcp_endpoint_cmp(conn->src, pkt, DST) &&
+		tcp_endpoint_cmp(conn->dst, pkt, SRC);
 }
 
 static struct tcp *tcp_conn_search(struct net_pkt *pkt)
