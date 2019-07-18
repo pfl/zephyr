@@ -32,7 +32,6 @@ static sys_slist_t tcp_conns = SYS_SLIST_STATIC_INIT(&tcp_conns);
 NET_BUF_POOL_DEFINE(tcp2_nbufs, 64/*count*/, 128/*size*/, 0, NULL);
 
 static void tcp_in(struct tcp *conn, struct net_pkt *pkt);
-static void tcp_out(struct tcp *conn, u8_t th_flags, ...);
 static void tcp_conn_delete(struct tcp *conn);
 static void tcp_add_to_retransmit(struct tcp *conn, struct net_pkt *pkt);
 static void tcp_retransmit(struct k_timer *timer);
@@ -312,129 +311,6 @@ static ssize_t tcp_data_get(struct net_pkt *pkt, void **data, ssize_t *data_len)
 	return len;
 }
 
-/* TCP state machine, everything happens here */
-static void tcp_in(struct tcp *conn, struct net_pkt *pkt)
-{
-	enum tcp_state next = TCP_NONE;
-	struct tcphdr *th = th_get(pkt);
-
-	tcp_dbg("%s", tcp_conn_state(conn, pkt));
-
-	if (ON(RST)) {
-		next = TCP_CLOSED;
-	}
-next_state:
-	switch (conn->state) {
-	case TCP_NONE:
-		conn_state(conn, TCP_LISTEN); /* fall-through */
-	case TCP_LISTEN:
-		if (conn->kind == TCP_ACTIVE) {
-			tcp_out(conn, SYN);
-			conn_seq(conn, + 1);
-			next = TCP_SYN_SENT;
-		} else if (EQ(SYN)) {
-			conn_ack(conn, th_seq(th) + 1); /* capture peer's isn */
-			next = TCP_SYN_RECEIVED;
-		}
-		break;
-	case TCP_SYN_RECEIVED:
-		tcp_out(conn, SYN | ACK);
-		conn_seq(conn, + 1);
-		next = TCP_SYN_SENT;
-		break;
-	case TCP_SYN_SENT:
-		if (EQ(ACK, SEQ(==))) { /* passive open */
-			tcp_timer_cancel(conn);
-			next = TCP_ESTABLISHED;
-		}
-		if (EQ(SYN | ACK, SEQ(==))) { /* active open */
-			tcp_timer_cancel(conn);
-			conn_ack(conn, th_seq(th) + 1);
-			tcp_out(conn, ACK);
-			next = TCP_ESTABLISHED;
-		}
-		break;
-	case TCP_ESTABLISHED:
-		if (!th && conn->snd->len) { /* TODO: Out of the loop */
-			ssize_t data_len;
-			tcp_out(conn, PSH, &data_len);
-			conn_seq(conn, + data_len);
-		}
-		if (EQ(FIN | ACK, SEQ(==))) { /* full-close */
-			conn_ack(conn, + 1);
-			tcp_out(conn, ACK);/* TODO: this could be optional */
-			next = TCP_CLOSE_WAIT;
-			break;
-		}
-		if (ON(PSH, SEQ(<))) {
-			tcp_out(conn, ACK); /* peer has resent */
-			break;
-		}
-		if (ON(PSH, SEQ(>))) {
-			tcp_out(conn, RST);
-			next = TCP_CLOSED;
-			break;
-		}
-		/* Non piggybacking version for clarity now */
-		if (ON(PSH, SEQ(==))) {
-			void *data;
-			ssize_t data_len;
-
-			if (tcp_data_get(pkt, &data, &data_len) <= 0) {
-				next = TCP_CLOSED;/* TODO: Send a reset? */
-				break;
-			}
-
-			tcp_win_push(conn->rcv, data, data_len);
-
-			conn_ack(conn, + data_len);
-			tcp_out(conn, ACK); /* ack the data */
-
-			if (tcp_echo) { /* TODO: Out of switch()? */
-				tcp_win_push(conn->snd, data, data_len);
-				tcp_out(conn, PSH, &data_len);
-				conn_seq(conn, + data_len);
-			}
-		}
-		if (EQ(ACK, SEQ(==))) {
-			/* tcp_win_clear(&conn->snd); */
-			break;
-		}
-		break; /* TODO: Catch all the rest here */
-	case TCP_CLOSE_WAIT:
-		tcp_out(conn, FIN | ACK);
-		next = TCP_LAST_ACK;
-		break;
-	case TCP_LAST_ACK:
-		if (EQ(ACK, SEQ(==))) {
-			next = TCP_CLOSED;
-		}
-		break;
-	case TCP_CLOSED:
-		tcp_conn_delete(conn);
-		break;
-	case TCP_TIME_WAIT:
-	case TCP_CLOSING:
-	case TCP_FIN_WAIT1:
-	case TCP_FIN_WAIT2:
-	default:
-		tcp_assert(false, "%s is unimplemented",
-				tcp_state_to_str(conn->state, true));
-	}
-
-	if (th) {
-		tcp_assert(th->th_flags == 0, "Unconsumed flags: %s",
-				tcp_th(pkt));
-	}
-
-	if (next) {
-		th = NULL;
-		conn_state(conn, next);
-		next = TCP_NONE;
-		goto next_state;
-	}
-}
-
 void tcp_pkt_adj(struct net_pkt *pkt, int req_len)
 {
 	struct net_ipv4_hdr *ip = ip_get(pkt);
@@ -680,6 +556,129 @@ static void tcp_out(struct tcp *conn, u8_t th_flags, ...)
 	tcp_dbg("%s", tcp_th(pkt));
 
 	tcp_pkt_send(conn, pkt, th_flags & SYN);
+}
+
+/* TCP state machine, everything happens here */
+static void tcp_in(struct tcp *conn, struct net_pkt *pkt)
+{
+	enum tcp_state next = TCP_NONE;
+	struct tcphdr *th = th_get(pkt);
+
+	tcp_dbg("%s", tcp_conn_state(conn, pkt));
+
+	if (ON(RST)) {
+		next = TCP_CLOSED;
+	}
+next_state:
+	switch (conn->state) {
+	case TCP_NONE:
+		conn_state(conn, TCP_LISTEN); /* fall-through */
+	case TCP_LISTEN:
+		if (conn->kind == TCP_ACTIVE) {
+			tcp_out(conn, SYN);
+			conn_seq(conn, + 1);
+			next = TCP_SYN_SENT;
+		} else if (EQ(SYN)) {
+			conn_ack(conn, th_seq(th) + 1); /* capture peer's isn */
+			next = TCP_SYN_RECEIVED;
+		}
+		break;
+	case TCP_SYN_RECEIVED:
+		tcp_out(conn, SYN | ACK);
+		conn_seq(conn, + 1);
+		next = TCP_SYN_SENT;
+		break;
+	case TCP_SYN_SENT:
+		if (EQ(ACK, SEQ(==))) { /* passive open */
+			tcp_timer_cancel(conn);
+			next = TCP_ESTABLISHED;
+		}
+		if (EQ(SYN | ACK, SEQ(==))) { /* active open */
+			tcp_timer_cancel(conn);
+			conn_ack(conn, th_seq(th) + 1);
+			tcp_out(conn, ACK);
+			next = TCP_ESTABLISHED;
+		}
+		break;
+	case TCP_ESTABLISHED:
+		if (!th && conn->snd->len) { /* TODO: Out of the loop */
+			ssize_t data_len;
+			tcp_out(conn, PSH, &data_len);
+			conn_seq(conn, + data_len);
+		}
+		if (EQ(FIN | ACK, SEQ(==))) { /* full-close */
+			conn_ack(conn, + 1);
+			tcp_out(conn, ACK);/* TODO: this could be optional */
+			next = TCP_CLOSE_WAIT;
+			break;
+		}
+		if (ON(PSH, SEQ(<))) {
+			tcp_out(conn, ACK); /* peer has resent */
+			break;
+		}
+		if (ON(PSH, SEQ(>))) {
+			tcp_out(conn, RST);
+			next = TCP_CLOSED;
+			break;
+		}
+		/* Non piggybacking version for clarity now */
+		if (ON(PSH, SEQ(==))) {
+			void *data;
+			ssize_t data_len;
+
+			if (tcp_data_get(pkt, &data, &data_len) <= 0) {
+				next = TCP_CLOSED;/* TODO: Send a reset? */
+				break;
+			}
+
+			tcp_win_push(conn->rcv, data, data_len);
+
+			conn_ack(conn, + data_len);
+			tcp_out(conn, ACK); /* ack the data */
+
+			if (tcp_echo) { /* TODO: Out of switch()? */
+				tcp_win_push(conn->snd, data, data_len);
+				tcp_out(conn, PSH, &data_len);
+				conn_seq(conn, + data_len);
+			}
+		}
+		if (EQ(ACK, SEQ(==))) {
+			/* tcp_win_clear(&conn->snd); */
+			break;
+		}
+		break; /* TODO: Catch all the rest here */
+	case TCP_CLOSE_WAIT:
+		tcp_out(conn, FIN | ACK);
+		next = TCP_LAST_ACK;
+		break;
+	case TCP_LAST_ACK:
+		if (EQ(ACK, SEQ(==))) {
+			next = TCP_CLOSED;
+		}
+		break;
+	case TCP_CLOSED:
+		tcp_conn_delete(conn);
+		break;
+	case TCP_TIME_WAIT:
+	case TCP_CLOSING:
+	case TCP_FIN_WAIT1:
+	case TCP_FIN_WAIT2:
+	default:
+		tcp_assert(false, "%s is unimplemented",
+				tcp_state_to_str(conn->state, true));
+	}
+
+	if (th) {
+		tcp_assert(th->th_flags == 0, "Unconsumed flags: %s",
+				tcp_th(pkt));
+	}
+
+	if (next) {
+		th = NULL;
+		conn_state(conn, next);
+		next = TCP_NONE;
+		goto next_state;
+	}
 }
 
 void tcp_input(struct net_pkt *pkt)
