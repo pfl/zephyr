@@ -39,13 +39,20 @@ static void tcp_retransmit(struct k_timer *timer);
 static void tcp_timer_cancel(struct tcp *conn);
 static struct tcp_win *tcp_win_new(const char *name);
 
+static size_t tcp_endpoint_len(sa_family_t af)
+{
+	return (af == AF_INET) ? sizeof(struct sockaddr_in) :
+		sizeof(struct sockaddr_in6);
+}
+
 static union tcp_endpoint *tcp_endpoint_new(struct net_pkt *pkt, int src)
 {
-	union tcp_endpoint *ep = tcp_calloc(1, sizeof(union tcp_endpoint));
+	sa_family_t af = net_pkt_family(pkt);
+	union tcp_endpoint *ep = tcp_calloc(1, tcp_endpoint_len(af));
 
-	ep->sa.sa_family = net_pkt_family(pkt);
+	ep->sa.sa_family = af;
 
-	switch (ep->sa.sa_family) {
+	switch (af) {
 	case AF_INET: {
 		struct net_ipv4_hdr *ip = ip_get(pkt);
 		struct tcphdr *th = th_get(pkt);
@@ -57,8 +64,7 @@ static union tcp_endpoint *tcp_endpoint_new(struct net_pkt *pkt, int src)
 		break;
 	}
 	case AF_INET6: default:
-		tcp_assert(false, "sa_family %hu isn't supported yet",
-				ep->sa.sa_family);
+		tcp_assert(false, "sa_family %hu isn't supported yet", af);
 	}
 
 	return ep;
@@ -88,17 +94,11 @@ static struct tcp *tcp_conn_new(struct net_pkt *pkt)
 	return conn;
 }
 
-static size_t tcp_endpoint_len(union tcp_endpoint *ep)
-{
-	return (ep->sa.sa_family == AF_INET) ? sizeof(struct sockaddr_in) :
-		sizeof(struct sockaddr_in6);
-}
-
 static bool tcp_endpoint_cmp(union tcp_endpoint *ep, struct net_pkt *pkt,
 				int which)
 {
 	union tcp_endpoint *ep_new = tcp_endpoint_new(pkt, which);
-	bool is_equal = memcmp(ep, ep_new, tcp_endpoint_len(ep)) ?
+	bool is_equal = memcmp(ep, ep_new, tcp_endpoint_len(ep->sa.sa_family)) ?
 		false : true;
 
 	tcp_free(ep_new);
