@@ -11,6 +11,7 @@
 extern "C" {
 #endif
 
+#include <sys/types.h>
 #include <string.h>
 #include <zephyr.h>
 #include <net/net_pkt.h>
@@ -32,11 +33,17 @@ extern "C" {
 #define is(_a, _b) (strcmp((_a), (_b)) == 0)
 #define ip_get(_x) ((struct net_ipv4_hdr *) net_pkt_ip_data((_x)))
 
+#define TP_MEM_HEADER_COOKIE 0xAAAAAAAA
+#define TP_MEM_FOOTER_COOKIE 0xBBBBBBBB
+
 struct tp_mem {
 	sys_snode_t next;
 	const char *file;
 	int line;
+	const char *func;
 	size_t size;
+	u32_t *footer;
+	u32_t header;
 	u8_t mem[];
 };
 

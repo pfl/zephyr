@@ -60,36 +60,90 @@ size_t tp_str_to_hex(void *buf, size_t bufsize, const char *s)
 	return j;
 }
 
-void *tp_malloc(size_t size, const char *file, int line)
+void *tp_malloc(size_t size, const char *file, int line, const char *func)
 {
-	struct tp_mem *mem = k_malloc(sizeof(struct tp_mem) + size);
+	struct tp_mem *mem = k_malloc(sizeof(struct tp_mem) + size +
+					sizeof(*mem->footer));
 
-	mem->size = size;
 	mem->file = file;
 	mem->line = line;
+	mem->func = func;
+
+	mem->size = size;
+
+	mem->header = TP_MEM_HEADER_COOKIE;
+
+	mem->footer = (void *) ((u8_t *) &mem->mem + size);
+	*mem->footer = TP_MEM_FOOTER_COOKIE;
 
 	sys_slist_append(&tp_mem, (sys_snode_t *) mem);
 
 	return &mem->mem;
 }
 
+static void dump(void *data, size_t len)
+{
+	u8_t *buf = data;
+	size_t i, width = 8;
+
+	for (i = 0; i < len; i++) {
+
+		if ((i % width) == 0) {
+			printk("0x%08lx\t", POINTER_TO_INT(buf + i));
+		}
+
+		printk("%02x ", buf[i]);
+
+		if (((i + 1) % width) == 0 || i == (len - 1)) {
+			printk("\n");
+		}
+	}
+}
+
+void tp_mem_chk(struct tp_mem *mem)
+{
+	if (TP_MEM_HEADER_COOKIE != mem->header ||
+		TP_MEM_FOOTER_COOKIE != *mem->footer) {
+
+		tp_dbg("%s:%d %s() %p size: %zu",
+			mem->file, mem->line, mem->func, mem->mem, mem->size);
+
+		dump(&mem->header, sizeof(mem->header));
+		dump(mem->mem, mem->size);
+		dump(mem->footer, sizeof(*mem->footer));
+
+		tp_assert(TP_MEM_HEADER_COOKIE == mem->header,
+				"%s:%d %s() %p Corrupt header cookie: 0x%x",
+				mem->file, mem->line, mem->func, mem->mem,
+				mem->header);
+
+		tp_assert(TP_MEM_FOOTER_COOKIE == *mem->footer,
+				"%s:%d %s() %p Corrupt footer cookie: 0x%x",
+				mem->file, mem->line, mem->func, mem->mem,
+				*mem->footer);
+	}
+}
+
 void tp_free(void *ptr, const char *file, int line, const char *func)
 {
 	struct tp_mem *mem = (void *)((u8_t *) ptr - sizeof(struct tp_mem));
+
+	tp_mem_chk(mem);
 
 	if (!sys_slist_find_and_remove(&tp_mem, (sys_snode_t *) mem)) {
 		tp_assert(false, "%s:%d %s() Invalid free(%p)",
 				file, line, func, ptr);
 	}
 
-	memset(ptr, 0, mem->size);
+	memset(mem, 0, sizeof(tp_mem) + mem->size + sizeof(*mem->footer));
 	k_free(mem);
 }
 
-void *tp_calloc(size_t nmemb, size_t size, const char *file, int line)
+void *tp_calloc(size_t nmemb, size_t size, const char *file, int line,
+		const char *func)
 {
 	size_t bytes = size * nmemb;
-	void *ptr = tp_malloc(bytes, file, line);
+	void *ptr = tp_malloc(bytes, file, line, func);
 
 	memset(ptr, 0, bytes);
 
@@ -102,6 +156,7 @@ void tp_mem_stat(void)
 
 	SYS_SLIST_FOR_EACH_CONTAINER(&tp_mem, mem, next) {
 		tp_dbg("len=%zu %s:%d", mem->size, mem->file, mem->line);
+		tp_mem_chk(mem);
 	}
 }
 

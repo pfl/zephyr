@@ -120,9 +120,10 @@ void tp_pkt_adj(struct net_pkt *pkt, int req_len);
 
 enum tp_type tp_msg_to_type(const char *s);
 
-void *tp_malloc(size_t size, const char *file, int line);
+void *tp_malloc(size_t size, const char *file, int line, const char *func);
 void tp_free(void *ptr, const char *file, int line, const char *func);
-void *tp_calloc(size_t nmemb, size_t size, const char *file, int line);
+void *tp_calloc(size_t nmemb, size_t size, const char *file, int line,
+		const char *func);
 void tp_mem_stat(void);
 
 struct net_buf *tp_nbuf_alloc(struct net_buf_pool *pool, size_t len,

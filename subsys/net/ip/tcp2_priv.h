@@ -28,9 +28,10 @@
 #define th_get(_x) ((_x) ? ((struct tcphdr *) (ip_get(_x) + 1)) : NULL)
 
 #if IS_ENABLED(CONFIG_NET_TP)
-#define tcp_malloc(_size) tp_malloc(_size, tp_basename(__FILE__), __LINE__)
+#define tcp_malloc(_size) \
+	tp_malloc(_size, tp_basename(__FILE__), __LINE__, __func__)
 #define tcp_calloc(_nmemb, _size) \
-	tp_calloc(_nmemb, _size, tp_basename(__FILE__), __LINE__)
+	tp_calloc(_nmemb, _size, tp_basename(__FILE__), __LINE__, __func__)
 #define tcp_free(_ptr) tp_free(_ptr, tp_basename(__FILE__), __LINE__, __func__)
 #else
 #define tcp_malloc(_size) k_malloc(_size)
