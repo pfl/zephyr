@@ -319,7 +319,7 @@ static ssize_t tcp_data_get(struct net_pkt *pkt, void **data, ssize_t *data_len)
 	tcp_dbg("%s->%s",					\
 		tcp_state_to_str((_conn)->state, false),	\
 		tcp_state_to_str((_s), false));			\
-	conn->state = _s;					\
+	(_conn)->state = _s;					\
 } while (0)
 
 /* TCP state machine, everything happens here */
