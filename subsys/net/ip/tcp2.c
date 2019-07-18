@@ -684,27 +684,19 @@ static void tcp_out(struct tcp *conn, u8_t th_flags, ...)
 
 void tcp_input(struct net_pkt *pkt)
 {
-	struct tcp *conn;
-	struct tcphdr *th = th_get(pkt);
+	struct tcphdr *th = tp_tap_input(pkt) ? NULL : th_get(pkt);
 
-	if (tp_tap_input(pkt)) {
-		goto out;
-	}
+	if (th) {
+		struct tcp *conn = tcp_conn_search(pkt);
 
-	if (th == NULL) {
-		goto out;
-	}
+		if (conn == NULL && SYN == th->th_flags) {
+			conn = tcp_conn_new(pkt);
+		}
 
-	conn = tcp_conn_search(pkt);
-	if (conn == NULL && th->th_flags == SYN) {
-		conn = tcp_conn_new(pkt);
+		if (conn) {
+			tcp_in(conn, pkt);
+		}
 	}
-
-	if (conn) {
-		tcp_in(conn, pkt);
-	}
-out:
-	return;
 }
 
 static void tcp_chain_free(struct net_buf *buf)
