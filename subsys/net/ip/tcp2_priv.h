@@ -7,6 +7,7 @@
 #include "tp.h"
 
 #define is(_a, _b) (strcmp((_a), (_b)) == 0)
+#define is_timer_subscribed(_t) (k_timer_remaining_get(_t))
 
 #define tcp_dbg(fmt, args...) printk("%s: " fmt "\n", __func__, ## args)
 #define tcp_err(fmt, args...) do {				\
@@ -189,9 +190,9 @@ struct tcp { /* TCP connection */
 	u16_t win;
 	struct tcp_win *rcv;
 	struct tcp_win *snd;
-	sys_slist_t retr;
-	int retries; /* number of retransmissions */
-	struct k_timer timer;
+	struct k_timer send_timer;
+	sys_slist_t send_queue;
+	int send_retries;
 	struct net_if *iface;
 };
 

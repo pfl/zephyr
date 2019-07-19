@@ -33,9 +33,6 @@ NET_BUF_POOL_DEFINE(tcp2_nbufs, 64/*count*/, 128/*size*/, 0, NULL);
 
 static void tcp_in(struct tcp *conn, struct net_pkt *pkt);
 static void tcp_conn_delete(struct tcp *conn);
-static void tcp_add_to_retransmit(struct tcp *conn, struct net_pkt *pkt);
-static void tcp_retransmit(struct k_timer *timer);
-static void tcp_timer_cancel(struct tcp *conn);
 static struct tcp_win *tcp_win_new(const char *name);
 
 static size_t tcp_endpoint_len(sa_family_t af)
@@ -67,103 +64,6 @@ static union tcp_endpoint *tcp_endpoint_new(struct net_pkt *pkt, int src)
 	}
 
 	return ep;
-}
-
-static struct tcp *tcp_conn_new(struct net_pkt *pkt)
-{
-	struct tcp *conn = tcp_calloc(1, sizeof(struct tcp));
-
-	conn->win = tcp_window;
-
-	conn->src = tcp_endpoint_new(pkt, DST);
-	conn->dst = tcp_endpoint_new(pkt, SRC);
-
-	conn->iface = pkt->iface;
-
-	conn->rcv = tcp_win_new("RCV");
-	conn->snd = tcp_win_new("SND");
-
-	conn->retries = tcp_retries;
-	sys_slist_init(&conn->retr);
-	k_timer_init(&conn->timer, tcp_retransmit, NULL);
-
-	sys_slist_append(&tcp_conns, (sys_snode_t *) conn);
-	tcp_in(conn, NULL);
-
-	return conn;
-}
-
-static bool tcp_endpoint_cmp(union tcp_endpoint *ep, struct net_pkt *pkt,
-				int which)
-{
-	union tcp_endpoint *ep_new = tcp_endpoint_new(pkt, which);
-	bool is_equal = memcmp(ep, ep_new, tcp_endpoint_len(ep->sa.sa_family)) ?
-		false : true;
-
-	tcp_free(ep_new);
-
-	return is_equal;
-}
-
-static bool tcp_conn_cmp(struct tcp *conn, struct net_pkt *pkt)
-{
-	return tcp_endpoint_cmp(conn->src, pkt, DST) &&
-		tcp_endpoint_cmp(conn->dst, pkt, SRC);
-}
-
-static struct tcp *tcp_conn_search(struct net_pkt *pkt)
-{
-	bool found = false;
-	struct tcp *conn;
-
-	SYS_SLIST_FOR_EACH_CONTAINER(&tcp_conns, conn, next) {
-
-		found = tcp_conn_cmp(conn, pkt);
-
-		if (found) {
-			break;
-		}
-	}
-
-	return found ? conn : NULL;
-}
-
-static void tcp_retransmissions_flush(struct tcp *conn)
-{
-	if (false == sys_slist_is_empty(&conn->retr)) {
-		struct net_pkt *pkt;
-
-		k_timer_stop(&conn->timer);
-
-		while ((pkt = tcp_slist(&conn->retr, get, struct net_pkt,
-					next))) {
-			tcp_pkt_unref(pkt);
-		}
-	}
-}
-
-static const char *tcp_state_to_str(enum tcp_state state, bool prefix)
-{
-	const char *s = NULL;
-#define _(_x) case _x: do { s = #_x; goto out; } while (0)
-	switch (state) {
-	_(TCP_NONE);
-	_(TCP_LISTEN);
-	_(TCP_SYN_SENT);
-	_(TCP_SYN_RECEIVED);
-	_(TCP_ESTABLISHED);
-	_(TCP_FIN_WAIT1);
-	_(TCP_FIN_WAIT2);
-	_(TCP_CLOSE_WAIT);
-	_(TCP_CLOSING);
-	_(TCP_LAST_ACK);
-	_(TCP_TIME_WAIT);
-	_(TCP_CLOSED);
-	}
-#undef _
-	tcp_assert(s, "Invalid TCP state: %u", state);
-out:
-	return prefix ? s : (s + 4);
 }
 
 static const char *tcp_th(struct net_pkt *pkt)
@@ -208,6 +108,123 @@ static const char *tcp_th(struct net_pkt *pkt)
 	tcp_assert(((bool)(fl & PSH)) == (data_len > 0),
 			"Invalid TCP packet: %s", buf);
 	return buf;
+}
+
+static void tcp_send(struct net_pkt *pkt)
+{
+	tcp_dbg("%s", tcp_th(pkt));
+
+	net_pkt_ref(pkt);
+
+	if (net_send_data(pkt) < 0) {
+		tcp_err("net_send_data()");
+		tcp_pkt_unref(pkt);
+	}
+
+	tcp_pkt_unref(pkt);
+}
+
+static void tcp_send_timer_cb(struct k_timer *timer)
+{
+	struct tcp *conn = k_timer_user_data_get(timer);
+
+	if (conn->send_retries > 0) {
+		struct net_pkt *pkt = tcp_pkt_clone(
+			tcp_slist(&conn->send_queue, peek_head,
+					struct net_pkt, next));
+		tcp_dbg("%s", tcp_th(pkt));
+
+		tcp_send(pkt);
+
+		k_timer_start(&conn->send_timer, K_MSEC(tcp_rto), 0);
+
+		conn->send_retries--;
+	} else {
+		tcp_conn_delete(conn);
+	}
+}
+
+static struct tcp *tcp_conn_new(struct net_pkt *pkt)
+{
+	struct tcp *conn = tcp_calloc(1, sizeof(struct tcp));
+
+	conn->win = tcp_window;
+
+	conn->src = tcp_endpoint_new(pkt, DST);
+	conn->dst = tcp_endpoint_new(pkt, SRC);
+
+	conn->iface = pkt->iface;
+
+	conn->rcv = tcp_win_new("RCV");
+	conn->snd = tcp_win_new("SND");
+
+	sys_slist_init(&conn->send_queue);
+	k_timer_init(&conn->send_timer, tcp_send_timer_cb, NULL /* stop cb */);
+	k_timer_user_data_set(&conn->send_timer, conn);
+
+	sys_slist_append(&tcp_conns, (sys_snode_t *) conn);
+	tcp_in(conn, NULL);
+
+	return conn;
+}
+
+static bool tcp_endpoint_cmp(union tcp_endpoint *ep, struct net_pkt *pkt,
+				int which)
+{
+	union tcp_endpoint *ep_new = tcp_endpoint_new(pkt, which);
+	bool is_equal = memcmp(ep, ep_new, tcp_endpoint_len(ep->sa.sa_family)) ?
+		false : true;
+
+	tcp_free(ep_new);
+
+	return is_equal;
+}
+
+static bool tcp_conn_cmp(struct tcp *conn, struct net_pkt *pkt)
+{
+	return tcp_endpoint_cmp(conn->src, pkt, DST) &&
+		tcp_endpoint_cmp(conn->dst, pkt, SRC);
+}
+
+static struct tcp *tcp_conn_search(struct net_pkt *pkt)
+{
+	bool found = false;
+	struct tcp *conn;
+
+	SYS_SLIST_FOR_EACH_CONTAINER(&tcp_conns, conn, next) {
+
+		found = tcp_conn_cmp(conn, pkt);
+
+		if (found) {
+			break;
+		}
+	}
+
+	return found ? conn : NULL;
+}
+
+static const char *tcp_state_to_str(enum tcp_state state, bool prefix)
+{
+	const char *s = NULL;
+#define _(_x) case _x: do { s = #_x; goto out; } while (0)
+	switch (state) {
+	_(TCP_NONE);
+	_(TCP_LISTEN);
+	_(TCP_SYN_SENT);
+	_(TCP_SYN_RECEIVED);
+	_(TCP_ESTABLISHED);
+	_(TCP_FIN_WAIT1);
+	_(TCP_FIN_WAIT2);
+	_(TCP_CLOSE_WAIT);
+	_(TCP_CLOSING);
+	_(TCP_LAST_ACK);
+	_(TCP_TIME_WAIT);
+	_(TCP_CLOSED);
+	}
+#undef _
+	tcp_assert(s, "Invalid TCP state: %u", state);
+out:
+	return prefix ? s : (s + 4);
 }
 
 static struct tcp_win *tcp_win_new(const char *name)
@@ -309,7 +326,7 @@ static ssize_t tcp_data_get(struct net_pkt *pkt, void **data, ssize_t *data_len)
 	return len;
 }
 
-void tcp_pkt_adj(struct net_pkt *pkt, int req_len)
+void tcp_adj(struct net_pkt *pkt, int req_len)
 {
 	struct net_ipv4_hdr *ip = ip_get(pkt);
 	u16_t len = ntohs(ip->len) + req_len;
@@ -317,20 +334,18 @@ void tcp_pkt_adj(struct net_pkt *pkt, int req_len)
 	ip->len = htons(len);
 }
 
-static void tcp_pkt_send(struct tcp *conn, struct net_pkt *pkt, bool retransmit)
+static void tcp_send_queue_flush(struct tcp *conn)
 {
-	if (retransmit) {
-		tcp_add_to_retransmit(conn, tcp_pkt_clone(pkt));
+	struct net_pkt *pkt;
+
+	if (is_timer_subscribed(&conn->send_timer)) {
+		k_timer_stop(&conn->send_timer);
 	}
 
-	net_pkt_ref(pkt);
-
-	if (net_send_data(pkt) < 0) {
-		tcp_err("net_send_data()");
+	while ((pkt = tcp_slist(&conn->send_queue, get,
+				struct net_pkt, next))) {
 		tcp_pkt_unref(pkt);
 	}
-
-	tcp_pkt_unref(pkt);
 }
 
 static void tcp_conn_delete(struct tcp *conn)
@@ -343,7 +358,7 @@ static void tcp_conn_delete(struct tcp *conn)
 		return;
 	}
 
-	tcp_retransmissions_flush(conn);
+	tcp_send_queue_flush(conn);
 
 	tcp_win_free(conn->snd);
 	tcp_win_free(conn->rcv);
@@ -425,59 +440,17 @@ static void tcp_csum(struct net_pkt *pkt)
 	th->th_sum = cs(s);
 }
 
-static void tcp_timer_subscribe(struct tcp *conn, struct net_pkt *pkt)
+static void tcp_send_timer_cancel(struct tcp *conn)
 {
-	tcp_dbg("%s", tcp_th(pkt));
+	struct net_pkt *pkt = tcp_slist(&conn->send_queue, get,
+					struct net_pkt, next);
+	k_timer_stop(&conn->send_timer);
 
-	k_timer_user_data_set(&conn->timer, conn);
-
-	k_timer_start(&conn->timer, K_MSEC(tcp_rto), 0);
-}
-
-static void tcp_retransmit(struct k_timer *timer)
-{
-	struct tcp *conn = k_timer_user_data_get(timer);
-	struct net_pkt *pkt = tcp_slist(&conn->retr, peek_head, struct net_pkt,
-					next);
-
-	tcp_assert(pkt, "Empty retransmission queue");
-
-	tcp_dbg("%s", tcp_th(pkt));
-
-	if (conn->retries-- > 0) {
-		tcp_pkt_send(conn, tcp_pkt_clone(pkt), false);
-
-		tcp_timer_subscribe(conn, pkt);
-	} else {
-		tcp_conn_delete(conn);
-	}
-}
-
-static void tcp_timer_cancel(struct tcp *conn)
-{
-	struct net_pkt *pkt = tcp_slist(&conn->retr, get, struct net_pkt, next);
-
-	k_timer_stop(&conn->timer);
-
-	tcp_assert(pkt, "No packet in the retransmission queue");
+	tcp_assert(pkt, "send_queue is empty");
 
 	tcp_dbg("%s", tcp_th(pkt));
 
 	tcp_pkt_unref(pkt);
-}
-
-static void tcp_add_to_retransmit(struct tcp *conn, struct net_pkt *pkt)
-{
-	bool subscribe = sys_slist_is_empty(&conn->retr);
-
-	tcp_dbg("%s", tcp_th(pkt));
-
-	sys_slist_append(&conn->retr, &pkt->next);
-
-	if (subscribe) {
-		conn->retries = tcp_retries;
-		tcp_timer_subscribe(conn, pkt);
-	}
 }
 
 /* TODO: Rework this */
@@ -507,37 +480,61 @@ static void tcp_linearize(struct net_pkt *pkt)
 	net_pkt_frag_add(pkt, buf);
 }
 
-static void tcp_out(struct tcp *conn, u8_t th_flags, ...)
+static void tcp_chain(struct net_pkt *pkt, struct net_buf *buf)
 {
-	struct net_pkt *pkt = tcp_pkt_make(conn, th_flags);
+	while (buf) {
+		struct net_buf *tmp, *nb = net_pkt_get_frag(pkt, K_NO_WAIT);
+		memcpy(net_buf_add(nb, buf->len), buf->data, buf->len);
+		net_pkt_frag_add(pkt, nb);
+		tmp = buf->frags;
+		buf->frags = NULL;
+		tcp_nbuf_unref(buf);
+		buf = tmp;
+	}
+}
 
-	if (th_flags & PSH) {
-		va_list ap;
-		ssize_t *data_len;
-		struct net_buf *data_out = tcp_win_pop(conn->snd,
-							conn->snd->len);
-		struct net_buf *buf = data_out, *tmp;
-		size_t len = net_buf_frags_len(data_out);
+static void tcp_send_queue_process(struct tcp *conn)
+{
+	struct net_pkt *pkt = tcp_slist(&conn->send_queue, peek_head,
+					struct net_pkt, next);
+	bool retransmit = SYN & th_get(pkt)->th_flags;
 
-		va_start(ap, th_flags);
-		data_len = va_arg(ap, ssize_t *);
-		*data_len = len;
-		va_end(ap);
+	tcp_dbg("%s", tcp_th(pkt));
 
-		/* TODO: In an absense of consolidating pull/pullup(),
-		 * 	 this is really ugly */
-		while (buf) {
-			struct net_buf *nb = net_pkt_get_frag(pkt, K_NO_WAIT);
-			memcpy(net_buf_add(nb, buf->len), buf->data, buf->len);
-			net_pkt_frag_add(pkt, nb);
-			tmp = buf->frags;
-			buf->frags = NULL;
-			tcp_nbuf_unref(buf);
-			buf = tmp;
+	if (retransmit) {
+		pkt = tcp_pkt_clone(pkt); /* net_send_data() modifies packet */
+	} else {
+		tcp_slist(&conn->send_queue, get, struct net_pkt, next);
+	}
+
+	tcp_send(pkt);
+
+	if (retransmit && false == is_timer_subscribed(&conn->send_timer)) {
+		conn->send_retries = tcp_retries;
+		k_timer_start(&conn->send_timer, K_MSEC(tcp_rto), 0);
+	}
+}
+
+static void tcp_out(struct tcp *conn, u8_t flags, ...)
+{
+	struct net_pkt *pkt = tcp_pkt_make(conn, flags);
+
+	if (PSH & flags) {
+		size_t len = conn->snd->len;
+		struct net_buf *buf = tcp_win_pop(conn->snd, len);
+
+		{
+			va_list ap;
+			ssize_t *out_len;
+			va_start(ap, flags);
+			out_len = va_arg(ap, ssize_t *);
+			*out_len = len;
+			va_end(ap);
 		}
-		/* TODO: There's a checksum problem with the following */
-		/*net_pkt_frag_add(pkt, data);*/
-		tcp_pkt_adj(pkt, len);
+
+		tcp_chain(pkt, buf);
+
+		tcp_adj(pkt, len);
 	}
 
 	tcp_linearize(pkt);
@@ -546,7 +543,9 @@ static void tcp_out(struct tcp *conn, u8_t th_flags, ...)
 
 	tcp_dbg("%s", tcp_th(pkt));
 
-	tcp_pkt_send(conn, pkt, th_flags & SYN);
+	sys_slist_append(&conn->send_queue, &pkt->next);
+
+	tcp_send_queue_process(conn);
 }
 
 /* TCP state machine, everything happens here */
@@ -581,11 +580,11 @@ next_state:
 		break;
 	case TCP_SYN_SENT:
 		if (EQ(ACK, SEQ(==))) { /* passive open */
-			tcp_timer_cancel(conn);
+			tcp_send_timer_cancel(conn);
 			next = TCP_ESTABLISHED;
 		}
 		if (EQ(SYN | ACK, SEQ(==))) { /* active open */
-			tcp_timer_cancel(conn);
+			tcp_send_timer_cancel(conn);
 			conn_ack(conn, th_seq(th) + 1);
 			tcp_out(conn, ACK);
 			next = TCP_ESTABLISHED;
@@ -715,7 +714,7 @@ ssize_t tcp_recv(int fd, void *buf, size_t len, int flags)
 	return bytes_received;
 }
 
-ssize_t tcp_send(int fd, const void *buf, size_t len, int flags)
+ssize_t _tcp_send(int fd, const void *buf, size_t len, int flags)
 {
 	struct tcp *conn = (void *) sys_slist_peek_head(&tcp_conns);
 
@@ -846,7 +845,7 @@ bool tp_input(struct net_pkt *pkt)
 		if (is("SEND", tp->op)) {
 			ssize_t len = tp_str_to_hex(buf, sizeof(buf), tp->data);
 			tcp_dbg("tcp_send(\"%s\")", tp->data);
-			tcp_send(0, buf, len, 0);
+			_tcp_send(0, buf, len, 0);
 		}
 		break;
 	case TP_CONFIG_REQUEST:
