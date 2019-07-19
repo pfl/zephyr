@@ -158,6 +158,25 @@ static void tcp_send_queue_process(struct k_timer *timer)
 	}
 }
 
+static void tcp_send_timer_cancel(struct tcp *conn)
+{
+	k_timer_stop(&conn->send_timer);
+
+	{
+		struct net_pkt *pkt = tcp_slist(&conn->send_queue, get,
+						struct net_pkt, next);
+		tcp_dbg("%s", tcp_th(pkt));
+		tcp_pkt_unref(pkt);
+	}
+
+	if (sys_slist_is_empty(&conn->send_queue)) {
+		conn->in_retransmission = false;
+	} else {
+		conn->send_retries = tcp_retries;
+		k_timer_start(&conn->send_timer, K_MSEC(tcp_rto), 0);
+	}
+}
+
 static struct tcp_win *tcp_win_new(const char *name)
 {
 	struct tcp_win *w = tcp_calloc(1, sizeof(struct tcp_win));
@@ -452,25 +471,6 @@ static void tcp_csum(struct net_pkt *pkt)
 	s += _cs(th, len);
 
 	th->th_sum = cs(s);
-}
-
-static void tcp_send_timer_cancel(struct tcp *conn)
-{
-	k_timer_stop(&conn->send_timer);
-
-	{
-		struct net_pkt *pkt = tcp_slist(&conn->send_queue, get,
-						struct net_pkt, next);
-		tcp_dbg("%s", tcp_th(pkt));
-		tcp_pkt_unref(pkt);
-	}
-
-	if (sys_slist_is_empty(&conn->send_queue)) {
-		conn->in_retransmission = false;
-	} else {
-		conn->send_retries = tcp_retries;
-		k_timer_start(&conn->send_timer, K_MSEC(tcp_rto), 0);
-	}
 }
 
 /* TODO: Rework this */
