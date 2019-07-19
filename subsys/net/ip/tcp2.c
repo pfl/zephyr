@@ -123,23 +123,50 @@ static void tcp_send(struct net_pkt *pkt)
 	tcp_pkt_unref(pkt);
 }
 
-static void tcp_send_timer_cb(struct k_timer *timer)
+static void tcp_send_queue_process(struct k_timer *timer)
 {
 	struct tcp *conn = k_timer_user_data_get(timer);
 
-	if (conn->send_retries > 0) {
-		struct net_pkt *pkt = tcp_pkt_clone(
-			tcp_slist(&conn->send_queue, peek_head,
-					struct net_pkt, next));
+	tcp_dbg("in_retransmission: %hu", conn->in_retransmission);
+
+	if (conn->in_retransmission) {
+		if (conn->send_retries > 0) {
+			struct net_pkt *pkt = tcp_pkt_clone(
+				tcp_slist(&conn->send_queue, peek_head,
+						struct net_pkt, next));
+			tcp_dbg("%s", tcp_th(pkt));
+
+			tcp_send(pkt);
+
+			k_timer_start(&conn->send_timer, K_MSEC(tcp_rto), 0);
+
+			conn->send_retries--;
+		} else {
+			tcp_conn_delete(conn);
+		}
+
+	} else {
+		struct net_pkt *pkt = tcp_slist(&conn->send_queue, peek_head,
+						struct net_pkt, next);
+		bool retransmit = SYN & th_get(pkt)->th_flags;
+
 		tcp_dbg("%s", tcp_th(pkt));
+
+		if (retransmit) {
+			/* net_send_data() modifies packet */
+			pkt = tcp_pkt_clone(pkt);
+		} else {
+			tcp_slist(&conn->send_queue, get, struct net_pkt, next);
+		}
 
 		tcp_send(pkt);
 
-		k_timer_start(&conn->send_timer, K_MSEC(tcp_rto), 0);
-
-		conn->send_retries--;
-	} else {
-		tcp_conn_delete(conn);
+		if (retransmit && false == is_timer_subscribed(
+				&conn->send_timer)) {
+			conn->send_retries = tcp_retries;
+			k_timer_start(&conn->send_timer, K_MSEC(tcp_rto), 0);
+			conn->in_retransmission = true;
+		}
 	}
 }
 
@@ -171,7 +198,7 @@ static struct tcp *tcp_conn_new(struct net_pkt *pkt)
 	conn->snd = tcp_win_new("SND");
 
 	sys_slist_init(&conn->send_queue);
-	k_timer_init(&conn->send_timer, tcp_send_timer_cb, NULL /* stop cb */);
+	k_timer_init(&conn->send_timer, tcp_send_queue_process, NULL);
 	k_timer_user_data_set(&conn->send_timer, conn);
 
 	sys_slist_append(&tcp_conns, (sys_snode_t *) conn);
@@ -441,15 +468,21 @@ static void tcp_csum(struct net_pkt *pkt)
 
 static void tcp_send_timer_cancel(struct tcp *conn)
 {
-	struct net_pkt *pkt = tcp_slist(&conn->send_queue, get,
-					struct net_pkt, next);
 	k_timer_stop(&conn->send_timer);
 
-	tcp_assert(pkt, "send_queue is empty");
+	{
+		struct net_pkt *pkt = tcp_slist(&conn->send_queue, get,
+						struct net_pkt, next);
+		tcp_dbg("%s", tcp_th(pkt));
+		tcp_pkt_unref(pkt);
+	}
 
-	tcp_dbg("%s", tcp_th(pkt));
-
-	tcp_pkt_unref(pkt);
+	if (sys_slist_is_empty(&conn->send_queue)) {
+		conn->in_retransmission = false;
+	} else {
+		conn->send_retries = tcp_retries;
+		k_timer_start(&conn->send_timer, K_MSEC(tcp_rto), 0);
+	}
 }
 
 /* TODO: Rework this */
@@ -492,28 +525,6 @@ static void tcp_chain(struct net_pkt *pkt, struct net_buf *buf)
 	}
 }
 
-static void tcp_send_queue_process(struct tcp *conn)
-{
-	struct net_pkt *pkt = tcp_slist(&conn->send_queue, peek_head,
-					struct net_pkt, next);
-	bool retransmit = SYN & th_get(pkt)->th_flags;
-
-	tcp_dbg("%s", tcp_th(pkt));
-
-	if (retransmit) {
-		pkt = tcp_pkt_clone(pkt); /* net_send_data() modifies packet */
-	} else {
-		tcp_slist(&conn->send_queue, get, struct net_pkt, next);
-	}
-
-	tcp_send(pkt);
-
-	if (retransmit && false == is_timer_subscribed(&conn->send_timer)) {
-		conn->send_retries = tcp_retries;
-		k_timer_start(&conn->send_timer, K_MSEC(tcp_rto), 0);
-	}
-}
-
 static void tcp_out(struct tcp *conn, u8_t flags, ...)
 {
 	struct net_pkt *pkt = tcp_pkt_make(conn, flags);
@@ -544,7 +555,7 @@ static void tcp_out(struct tcp *conn, u8_t flags, ...)
 
 	sys_slist_append(&conn->send_queue, &pkt->next);
 
-	tcp_send_queue_process(conn);
+	tcp_send_queue_process(&conn->send_timer);
 }
 
 /* TCP state machine, everything happens here */
