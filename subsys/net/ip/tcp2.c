@@ -32,7 +32,7 @@ static sys_slist_t tcp_conns = SYS_SLIST_STATIC_INIT(&tcp_conns);
 NET_BUF_POOL_DEFINE(tcp2_nbufs, 64/*count*/, 128/*size*/, 0, NULL);
 
 static void tcp_in(struct tcp *conn, struct net_pkt *pkt);
-static void tcp_conn_delete(struct tcp *conn);
+static void *tcp_conn_delete(struct tcp *conn);
 
 static size_t tcp_endpoint_len(sa_family_t af)
 {
@@ -137,7 +137,7 @@ static void tcp_send_queue_process(struct k_timer *timer)
 			tcp_send(tcp_pkt_clone(pkt));
 			conn->send_retries--;
 		} else {
-			tcp_conn_delete(conn);
+			conn = tcp_conn_delete(conn);
 		}
 	} else {
 		bool forget = (SYN & th_get(pkt)->th_flags) == false;
@@ -153,7 +153,7 @@ static void tcp_send_queue_process(struct k_timer *timer)
 		}
 	}
 
-	if (conn->in_retransmission) {
+	if (conn && conn->in_retransmission) {
 		k_timer_start(&conn->send_timer, K_MSEC(tcp_rto), 0);
 	}
 }
@@ -381,14 +381,14 @@ static void tcp_send_queue_flush(struct tcp *conn)
 	}
 }
 
-static void tcp_conn_delete(struct tcp *conn)
+static void *tcp_conn_delete(struct tcp *conn)
 {
 	tcp_dbg("");
 
 	tp_out(conn->iface, "TP_TRACE", "event", "CONN_DELETE");
 
 	if (_tcp_conn_delete == false) {
-		return;
+		goto out;
 	}
 
 	tcp_send_queue_flush(conn);
@@ -401,6 +401,8 @@ static void tcp_conn_delete(struct tcp *conn)
 
 	sys_slist_find_and_remove(&tcp_conns, (sys_snode_t *) conn);
 	tcp_free(conn);
+out:
+	return NULL;
 }
 
 static struct net_pkt *tcp_pkt_make(struct tcp *conn, u8_t flags)
