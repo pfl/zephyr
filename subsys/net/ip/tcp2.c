@@ -33,7 +33,6 @@ NET_BUF_POOL_DEFINE(tcp2_nbufs, 64/*count*/, 128/*size*/, 0, NULL);
 
 static void tcp_in(struct tcp *conn, struct net_pkt *pkt);
 static void tcp_conn_delete(struct tcp *conn);
-static struct tcp_win *tcp_win_new(const char *name);
 
 static size_t tcp_endpoint_len(sa_family_t af)
 {
@@ -144,6 +143,19 @@ static void tcp_send_timer_cb(struct k_timer *timer)
 	}
 }
 
+static struct tcp_win *tcp_win_new(const char *name)
+{
+	struct tcp_win *w = tcp_calloc(1, sizeof(struct tcp_win));
+
+	w->name = tcp_malloc(strlen(name) + 1);
+
+	strcpy(w->name, name);
+
+	sys_slist_init(&w->bufs);
+
+	return w;
+}
+
 static struct tcp *tcp_conn_new(struct net_pkt *pkt)
 {
 	struct tcp *conn = tcp_calloc(1, sizeof(struct tcp));
@@ -225,19 +237,6 @@ static const char *tcp_state_to_str(enum tcp_state state, bool prefix)
 	tcp_assert(s, "Invalid TCP state: %u", state);
 out:
 	return prefix ? s : (s + 4);
-}
-
-static struct tcp_win *tcp_win_new(const char *name)
-{
-	struct tcp_win *w = tcp_calloc(1, sizeof(struct tcp_win));
-
-	w->name = tcp_malloc(strlen(name) + 1);
-
-	strcpy(w->name, name);
-
-	sys_slist_init(&w->bufs);
-
-	return w;
 }
 
 static void tcp_win_free(struct tcp_win *w)
