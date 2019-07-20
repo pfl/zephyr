@@ -123,7 +123,7 @@ static void tcp_send(struct net_pkt *pkt)
 	tcp_pkt_unref(pkt);
 }
 
-static void tcp_send_queue_process(struct k_timer *timer)
+static void tcp_send_process(struct k_timer *timer)
 {
 	struct tcp *conn = k_timer_user_data_get(timer);
 	struct net_pkt *pkt = tcp_slist(&conn->send_queue, peek_head,
@@ -206,7 +206,7 @@ static struct tcp *tcp_conn_new(struct net_pkt *pkt)
 	conn->snd = tcp_win_new("SND");
 
 	sys_slist_init(&conn->send_queue);
-	k_timer_init(&conn->send_timer, tcp_send_queue_process, NULL);
+	k_timer_init(&conn->send_timer, tcp_send_process, NULL);
 	k_timer_user_data_set(&conn->send_timer, conn);
 
 	sys_slist_append(&tcp_conns, (sys_snode_t *) conn);
@@ -546,7 +546,7 @@ static void tcp_out(struct tcp *conn, u8_t flags, ...)
 
 	sys_slist_append(&conn->send_queue, &pkt->next);
 
-	tcp_send_queue_process(&conn->send_timer);
+	tcp_send_process(&conn->send_timer);
 }
 
 /* TCP state machine, everything happens here */
