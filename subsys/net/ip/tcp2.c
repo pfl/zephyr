@@ -29,7 +29,7 @@ static bool _tcp_conn_delete = true;
 
 static sys_slist_t tcp_conns = SYS_SLIST_STATIC_INIT(&tcp_conns);
 
-NET_BUF_POOL_DEFINE(tcp2_nbufs, 64/*count*/, 128/*size*/, 0, NULL);
+NET_BUF_POOL_DEFINE(tcp_nbufs, 64/*count*/, 128/*size*/, 0, NULL);
 
 static void tcp_in(struct tcp *conn, struct net_pkt *pkt);
 static void *tcp_conn_delete(struct tcp *conn);
@@ -289,7 +289,7 @@ static void tcp_win_free(struct tcp_win *w)
 
 static void tcp_win_push(struct tcp_win *w, const void *data, size_t len)
 {
-	struct net_buf *buf = tcp_nbuf_alloc(&tcp2_nbufs, len);
+	struct net_buf *buf = tcp_nbuf_alloc(&tcp_nbufs, len);
 	size_t prev_len = w->len;
 
 	tcp_assert(len, "Zero length data");
@@ -486,7 +486,7 @@ static void tcp_linearize(struct net_pkt *pkt)
 
 	while (pkt->frags) {
 		struct net_buf *buf = pkt->frags;
-		tmp = net_buf_alloc_len(&tcp2_nbufs, buf->len,
+		tmp = net_buf_alloc_len(&tcp_nbufs, buf->len,
 					K_NO_WAIT);
 		memcpy(net_buf_add(tmp, buf->len), buf->data, buf->len);
 		sys_slist_append(&bufs, &tmp->next);
