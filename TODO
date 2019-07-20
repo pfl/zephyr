@@ -4,6 +4,7 @@ Complexity/effort: C1/C2/C4/C8 (weeks)
 Zephyr:
 
 - Complete TCP data unhappy paths (C2, high)
+- Add tcp_win_peek() (<C1, high)
 - Change the encoding of TCP sequence numbers in test protocol to string (C1, high)
 - Integrate with subsys/net/ip/connection.c (C2, high)
 - Add the support for IPv6 (C2, medium)
