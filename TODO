@@ -8,7 +8,6 @@ Zephyr:
 - Change the encoding of TCP sequence numbers in test protocol to string (C1, high)
 - Integrate with subsys/net/ip/connection.c (C2, high)
 - Add the support for IPv6 (C2, medium)
-- Drop TCP_NONE state? (<C1, medium)
 - Drop tcp_conn_kind? (<C1, medium)
 - Sanitize tp_input() (allow only JSON) (<C1, low)
 - Drop the first version of the test protocol (C1, low)
