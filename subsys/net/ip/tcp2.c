@@ -113,7 +113,7 @@ static void tcp_send(struct net_pkt *pkt)
 {
 	tcp_dbg("%s", tcp_th(pkt));
 
-	net_pkt_ref(pkt);
+	tcp_pkt_ref(pkt);
 
 	if (net_send_data(pkt) < 0) {
 		tcp_err("net_send_data()");

@@ -93,6 +93,7 @@ static struct net_pkt *tcp_pkt_alloc(size_t len)
 #define tcp_pkt_clone(_pkt) net_pkt_clone(_pkt, K_NO_WAIT)
 #define tcp_pkt_unref(_pkt) net_pkt_unref(_pkt)
 #endif
+#define tcp_pkt_ref(_pkt) net_pkt_ref(_pkt)
 
 #if IS_ENABLED(CONFIG_NET_TP)
 #define conn_seq(_conn, _req) \
