@@ -191,6 +191,29 @@ static struct tcp_win *tcp_win_new(const char *name)
 	return w;
 }
 
+static const char *tcp_state_to_str(enum tcp_state state, bool prefix)
+{
+	const char *s = NULL;
+#define _(_x) case _x: do { s = #_x; goto out; } while (0)
+	switch (state) {
+	_(TCP_LISTEN);
+	_(TCP_SYN_SENT);
+	_(TCP_SYN_RECEIVED);
+	_(TCP_ESTABLISHED);
+	_(TCP_FIN_WAIT1);
+	_(TCP_FIN_WAIT2);
+	_(TCP_CLOSE_WAIT);
+	_(TCP_CLOSING);
+	_(TCP_LAST_ACK);
+	_(TCP_TIME_WAIT);
+	_(TCP_CLOSED);
+	}
+#undef _
+	tcp_assert(s, "Invalid TCP state: %u", state);
+out:
+	return prefix ? s : (s + 4);
+}
+
 static struct tcp *tcp_conn_new(struct net_pkt *pkt)
 {
 	struct tcp *conn = tcp_calloc(1, sizeof(struct tcp));
@@ -210,6 +233,7 @@ static struct tcp *tcp_conn_new(struct net_pkt *pkt)
 	k_timer_user_data_set(&conn->send_timer, conn);
 
 	sys_slist_append(&tcp_conns, (sys_snode_t *) conn);
+	conn->state = TCP_LISTEN;
 	tcp_in(conn, NULL);
 
 	return conn;
@@ -248,30 +272,6 @@ static struct tcp *tcp_conn_search(struct net_pkt *pkt)
 	}
 
 	return found ? conn : NULL;
-}
-
-static const char *tcp_state_to_str(enum tcp_state state, bool prefix)
-{
-	const char *s = NULL;
-#define _(_x) case _x: do { s = #_x; goto out; } while (0)
-	switch (state) {
-	_(TCP_NONE);
-	_(TCP_LISTEN);
-	_(TCP_SYN_SENT);
-	_(TCP_SYN_RECEIVED);
-	_(TCP_ESTABLISHED);
-	_(TCP_FIN_WAIT1);
-	_(TCP_FIN_WAIT2);
-	_(TCP_CLOSE_WAIT);
-	_(TCP_CLOSING);
-	_(TCP_LAST_ACK);
-	_(TCP_TIME_WAIT);
-	_(TCP_CLOSED);
-	}
-#undef _
-	tcp_assert(s, "Invalid TCP state: %u", state);
-out:
-	return prefix ? s : (s + 4);
 }
 
 static void tcp_win_free(struct tcp_win *w)
@@ -552,7 +552,7 @@ static void tcp_out(struct tcp *conn, u8_t flags, ...)
 /* TCP state machine, everything happens here */
 static void tcp_in(struct tcp *conn, struct net_pkt *pkt)
 {
-	enum tcp_state next = TCP_NONE;
+	u8_t next = 0;
 	struct tcphdr *th = th_get(pkt);
 
 	tcp_dbg("%s", tcp_conn_state(conn, pkt));
@@ -562,8 +562,6 @@ static void tcp_in(struct tcp *conn, struct net_pkt *pkt)
 	}
 next_state:
 	switch (conn->state) {
-	case TCP_NONE:
-		conn_state(conn, TCP_LISTEN); /* fall-through */
 	case TCP_LISTEN:
 		if (conn->kind == TCP_ACTIVE) {
 			tcp_out(conn, SYN);
@@ -667,7 +665,7 @@ next_state:
 	if (next) {
 		th = NULL;
 		conn_state(conn, next);
-		next = TCP_NONE;
+		next = 0;
 		goto next_state;
 	}
 }

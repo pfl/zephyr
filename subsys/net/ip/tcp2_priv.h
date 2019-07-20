@@ -148,8 +148,7 @@ enum th_flags {
 };
 
 enum tcp_state {
-	TCP_NONE = 0,
-	TCP_LISTEN,
+	TCP_LISTEN = 1,
 	TCP_SYN_SENT,
 	TCP_SYN_RECEIVED,
 	TCP_ESTABLISHED,
