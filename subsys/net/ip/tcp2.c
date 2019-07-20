@@ -140,9 +140,8 @@ static void tcp_send_process(struct k_timer *timer)
 			conn = tcp_conn_delete(conn);
 		}
 	} else {
-		u8_t flags = th_get(pkt)->th_flags;
-		bool forget = ACK == flags || PSH == flags ||
-			(ACK | PSH) == flags;
+		u8_t fl = th_get(pkt)->th_flags;
+		bool forget = ACK == fl || PSH == fl || (ACK | PSH) == fl;
 
 		pkt = forget ? tcp_slist(&conn->send_queue, get, struct net_pkt,
 						next) : tcp_pkt_clone(pkt);
