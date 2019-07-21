@@ -6,7 +6,7 @@ Zephyr:
 - Complete TCP data unhappy paths (C2, high)
 - Add tcp_win_peek() (<C1, high)
 - Change the encoding of TCP sequence numbers in test protocol to string (C1, high)
-- Integrate with subsys/net/ip/connection.c (C2, high)
+- Integrate with subsys/net/ip/connection.c (=>C2, high)
 - Add the support for IPv6 (C2, medium)
 - Drop tcp_conn_kind? (<C1, medium)
 - Sanitize tp_input() (allow only JSON) (<C1, low)
