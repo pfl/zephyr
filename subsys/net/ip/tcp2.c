@@ -736,10 +736,9 @@ static sys_slist_t tp_q = SYS_SLIST_STATIC_INIT(&tp_q);
 static void tcp_step(void)
 {
 	struct net_pkt *pkt = (void *) sys_slist_get(&tp_q);
-	struct tcp *conn;
 
 	if (pkt) {
-		conn = tcp_conn_search(pkt);
+		struct tcp *conn = tcp_conn_search(pkt);
 
 		if (conn == NULL) {
 			conn = tcp_conn_new(pkt);
