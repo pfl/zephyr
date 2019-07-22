@@ -217,14 +217,17 @@ void tp_nbuf_stat(void)
 static struct net_pkt *tp_pkt_get(size_t len)
 {
 	struct net_pkt *pkt = net_pkt_alloc(K_NO_WAIT);
-	struct net_buf *nbuf = net_pkt_get_frag(pkt, K_NO_WAIT);
-
-	tp_assert(pkt && nbuf, "");
 
 	pkt->family = AF_INET;
 
-	net_buf_add(nbuf, len);
-	net_pkt_frag_insert(pkt, nbuf);
+	tp_assert(pkt, "");
+
+	if (len) {
+		struct net_buf *buf = net_pkt_get_frag(pkt, K_NO_WAIT);
+		net_buf_add(buf, len);
+		net_pkt_frag_insert(pkt, buf);
+		tp_assert(buf, "");
+	}
 
 	return pkt;
 }

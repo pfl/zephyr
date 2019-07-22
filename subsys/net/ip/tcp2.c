@@ -476,31 +476,22 @@ static void tcp_csum(struct net_pkt *pkt)
 	th->th_sum = cs(s);
 }
 
-/* TODO: Rework this */
-static void tcp_linearize(struct net_pkt *pkt)
+static struct net_pkt *tcp_pkt_linearize(struct net_pkt *pkt)
 {
-	struct net_buf *buf, *tmp;
-	sys_slist_t bufs;
+	struct net_pkt *new = tcp_pkt_alloc(0);
+	struct net_buf *tmp, *buf = net_pkt_get_frag(new, K_NO_WAIT);
 
-	sys_slist_init(&bufs);
-
-	while (pkt->frags) {
-		struct net_buf *buf = pkt->frags;
-		tmp = net_buf_alloc_len(&tcp_nbufs, buf->len,
-					K_NO_WAIT);
-		memcpy(net_buf_add(tmp, buf->len), buf->data, buf->len);
-		sys_slist_append(&bufs, &tmp->next);
-		net_pkt_frag_del(pkt, NULL, pkt->frags);
-	}
-
-	buf = net_pkt_get_frag(pkt, K_NO_WAIT);
-
-	while ((tmp = tcp_slist(&bufs, get, struct net_buf, next))) {
+	for (tmp = pkt->frags; tmp; tmp = tmp->frags) {
 		memcpy(net_buf_add(buf, tmp->len), tmp->data, tmp->len);
-		net_buf_unref(tmp);
 	}
 
-	net_pkt_frag_add(pkt, buf);
+	net_pkt_frag_add(new, buf);
+
+	new->iface = pkt->iface;
+
+	tcp_pkt_unref(pkt);
+
+	return new;
 }
 
 static void tcp_chain(struct net_pkt *pkt, struct net_buf *buf)
@@ -538,7 +529,7 @@ static void tcp_out(struct tcp *conn, u8_t flags, ...)
 		tcp_adj(pkt, len);
 	}
 
-	tcp_linearize(pkt);
+	pkt = tcp_pkt_linearize(pkt);
 
 	tcp_csum(pkt);
 
