@@ -341,21 +341,25 @@ static const char *tcp_conn_state(struct tcp *conn, struct net_pkt *pkt)
 	return buf;
 }
 
-static ssize_t tcp_data_get(struct net_pkt *pkt, void **data, ssize_t *data_len)
+static size_t tcp_data_get(struct tcp *conn, struct net_pkt *pkt)
 {
 	struct net_ipv4_hdr *ip = ip_get(pkt);
 	struct tcphdr *th = th_get(pkt);
 	size_t th_off = th->th_off * 4;
 	ssize_t len = ntohs(ip->len) - sizeof(*ip) - th_off;
-	static u8_t buf[64];/* The absence of _linearize()
-				leads to this temp workaround */
-	tcp_assert(len <= sizeof(buf), "Insufficient buffer for data");
+	void *buf = tcp_malloc(len);
 
 	net_pkt_skip(pkt, sizeof(*ip) + th_off);
+
 	net_pkt_read(pkt, buf, len);
 
-	*data = buf;
-	*data_len = len;
+	tcp_win_push(conn->rcv, buf, len);
+
+	if (tcp_echo) {
+		tcp_win_push(conn->snd, buf, len);
+	}
+
+	tcp_free(buf);
 
 	return len;
 }
@@ -603,28 +607,23 @@ next_state:
 		}
 		/* Non piggybacking version for clarity now */
 		if (ON(PSH, SEQ(==))) {
-			void *data;
-			ssize_t data_len;
+			ssize_t len = tcp_data_get(conn, pkt);
 
-			if (tcp_data_get(pkt, &data, &data_len) <= 0) {
-				next = TCP_CLOSED;/* TODO: Send a reset? */
+			if (len) {
+				conn_ack(conn, + len);
+				tcp_out(conn, ACK);
+
+				if (tcp_echo) { /* TODO: Out of the loop? */
+					tcp_out(conn, PSH, &len);
+					conn_seq(conn, + len);
+				}
+			} else {
+				next = TCP_CLOSED; /* TODO: Send a reset? */
 				break;
-			}
-
-			tcp_win_push(conn->rcv, data, data_len);
-
-			conn_ack(conn, + data_len);
-			tcp_out(conn, ACK); /* ack the data */
-
-			if (tcp_echo) { /* TODO: Out of switch()? */
-				tcp_win_push(conn->snd, data, data_len);
-				tcp_out(conn, PSH, &data_len);
-				conn_seq(conn, + data_len);
 			}
 		}
 		if (EQ(ACK, SEQ(==))) {
 			/* tcp_win_clear(&conn->snd); */
-			break;
 		}
 		break; /* TODO: Catch all the rest here */
 	case TCP_CLOSE_WAIT:
