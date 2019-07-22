@@ -193,7 +193,7 @@ struct tcp { /* TCP connection */
 	struct k_timer send_timer;
 	sys_slist_t send_queue;
 	bool in_retransmission;
-	int send_retries;
+	size_t send_retries;
 	struct net_if *iface;
 };
 
