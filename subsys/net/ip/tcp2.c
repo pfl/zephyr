@@ -618,7 +618,8 @@ next_state:
 					conn_seq(conn, + len);
 				}
 			} else {
-				next = TCP_CLOSED; /* TODO: Send a reset? */
+				tcp_out(conn, RST);
+				next = TCP_CLOSED;
 				break;
 			}
 		}
