@@ -70,8 +70,8 @@ static const char *tcp_th(struct net_pkt *pkt)
 #define FL_MAX 80
 	static char buf[FL_MAX];
 	char *s = buf;
-	struct tcphdr *th = th_get(pkt);
 	struct net_ipv4_hdr *ip = ip_get(pkt);
+	struct tcphdr *th = th_get(pkt);
 	u8_t fl = th->th_flags;
 	ssize_t data_len = ntohs(ip->len) - sizeof(*ip) - th->th_off * 4;
 
@@ -100,11 +100,11 @@ static const char *tcp_th(struct net_pkt *pkt)
 		s--;
 	}
 
-	if (data_len > 0) {
+	if (data_len) {
 		sprintf(s, ", len=%ld", data_len);
 	}
 
-	tcp_assert(((bool)(fl & PSH)) == (data_len > 0),
+	tcp_assert(((bool)(PSH & fl)) == (data_len > 0),
 			"Invalid TCP packet: %s", buf);
 	return buf;
 }
