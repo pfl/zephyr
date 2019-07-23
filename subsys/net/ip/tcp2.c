@@ -341,15 +341,23 @@ static const char *tcp_conn_state(struct tcp *conn, struct net_pkt *pkt)
 	return buf;
 }
 
+static size_t tcp_data_len(struct net_pkt *pkt)
+{
+	struct net_ipv4_hdr *ip = ip_get(pkt);
+	struct tcphdr *th = th_get(pkt);
+	ssize_t len = ntohs(ip->len) - sizeof(*ip) - th->th_off * 4;
+
+	return (size_t) len;
+}
+
 static size_t tcp_data_get(struct tcp *conn, struct net_pkt *pkt)
 {
 	struct net_ipv4_hdr *ip = ip_get(pkt);
 	struct tcphdr *th = th_get(pkt);
-	size_t th_off = th->th_off * 4;
-	ssize_t len = ntohs(ip->len) - sizeof(*ip) - th_off;
+	ssize_t len = tcp_data_len(pkt);
 	void *buf = tcp_malloc(len);
 
-	net_pkt_skip(pkt, sizeof(*ip) + th_off);
+	net_pkt_skip(pkt, sizeof(*ip) + th->th_off * 4);
 
 	net_pkt_read(pkt, buf, len);
 
