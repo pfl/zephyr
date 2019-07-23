@@ -15,6 +15,10 @@
 	k_oops();						\
 } while (0)
 
+#define tcp_warn(fmt, args...) do {				\
+	printk("%s: Warning: " fmt "\n", __func__, ## args);	\
+} while (0)
+
 #define tcp_assert(cond, fmt, args...) do {			\
 	if ((cond) == false) {					\
 		printk("%s: Assertion failed: %s, " fmt "\n",	\
