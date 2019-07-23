@@ -498,16 +498,25 @@ static struct net_pkt *tcp_pkt_linearize(struct net_pkt *pkt)
 	return new;
 }
 
-static void tcp_chain(struct net_pkt *pkt, struct net_buf *buf)
+static void tcp_chain_free(struct net_buf *head)
 {
-	while (buf) {
-		struct net_buf *tmp, *nb = net_pkt_get_frag(pkt, K_NO_WAIT);
-		memcpy(net_buf_add(nb, buf->len), buf->data, buf->len);
-		net_pkt_frag_add(pkt, nb);
-		tmp = buf->frags;
-		buf->frags = NULL;
-		tcp_nbuf_unref(buf);
-		buf = tmp;
+	struct net_buf *next;
+
+	for ( ; head; head = next) {
+		next = head->frags;
+		head->frags = NULL;
+		tcp_nbuf_unref(head);
+	}
+}
+
+static void tcp_chain(struct net_pkt *pkt, struct net_buf *head)
+{
+	struct net_buf *buf;
+
+	for ( ; head; head = head->frags) {
+		buf = net_pkt_get_frag(pkt, K_NO_WAIT);
+		memcpy(net_buf_add(buf, head->len), head->data, head->len);
+		net_pkt_frag_add(pkt, buf);
 	}
 }
 
@@ -529,6 +538,8 @@ static void tcp_out(struct tcp *conn, u8_t flags, ...)
 		}
 
 		tcp_chain(pkt, buf);
+
+		tcp_chain_free(buf);
 
 		tcp_adj(pkt, len);
 	}
@@ -675,17 +686,6 @@ void tcp_input(struct net_pkt *pkt)
 		if (conn) {
 			tcp_in(conn, pkt);
 		}
-	}
-}
-
-static void tcp_chain_free(struct net_buf *buf)
-{
-	struct net_buf *next;
-
-	for ( ; buf; buf = next) {
-		next = buf->frags;
-		buf->frags = NULL;
-		tcp_nbuf_unref(buf);
 	}
 }
 
