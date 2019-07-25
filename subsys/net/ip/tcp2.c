@@ -572,7 +572,7 @@ static void tcp_in(struct tcp *conn, struct net_pkt *pkt)
 	tcp_dbg("%s", tcp_conn_state(conn, pkt));
 
 	if (ON(RST)) {
-		next = TCP_CLOSED;
+		conn_state(conn, TCP_CLOSED);
 	}
 next_state:
 	switch (conn->state) {
