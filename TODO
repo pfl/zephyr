@@ -16,7 +16,6 @@ Zephyr:
 - Make tp to register callback in order to be reusable (<C1, low)
 - Slightly redo tp_seq_track() to be more generic and track also
   connection state changes (<=C1, low)
-- Redo ON() and EQ() macros (<=C1, low)
 - Track all net bufs through test protocol tracking functions
   (currently only network buffers in TCP windows are tracked) (<=C1, low)
 
