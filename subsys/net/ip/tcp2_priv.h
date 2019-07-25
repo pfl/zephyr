@@ -201,40 +201,17 @@ struct tcp { /* TCP connection */
 	struct net_if *iface;
 };
 
-/*
- * The following macros assume the presense of in the local context:
- *  - struct tcphdr *th: pointer to the TCP header
- *  - struct tcp *conn: pointer to the TCP connection
- */
-#define SEQ(_cond) (th && (th_seq(th) _cond conn->ack))
+#define _flags(_fl, _op, _mask, _cond)					\
+({									\
+	bool result = false;						\
+									\
+	if (*(_fl) && (_cond) && (*(_fl) _op (_mask))) {		\
+		*(_fl) &= ~(_mask);					\
+		result = true;						\
+	}								\
+									\
+	result;								\
+})
 
-static bool th_is_present(struct tcphdr *th, const u8_t fl, bool cond)
-{
-	bool present = false;
-
-	if (th && cond && (fl & th->th_flags)) {
-		th->th_flags &= ~fl;
-		present = true;
-	}
-
-	return present;
-}
-
-#define ON(_fl, _cond...) \
-	th_is_present(th, _fl, strlen("" #_cond) ? _cond : true)
-
-static bool th_is_equal(struct tcphdr *th, const u8_t fl, bool cond)
-{
-	bool equal = false;
-
-	if (th && cond && (fl == th->th_flags)) {
-		th->th_flags &= ~fl;
-		equal = true;
-	}
-
-	return equal;
-}
-
-#define EQ(_fl, _cond...) \
-	th_is_equal(th, _fl, strlen("" #_cond) ? _cond : true)
-
+#define FL(_fl, _op, _mask, _args...)					\
+	_flags(_fl, _op, _mask, strlen("" #_args) ? _args : true)

@@ -65,6 +65,39 @@ static union tcp_endpoint *tcp_endpoint_new(struct net_pkt *pkt, int src)
 	return ep;
 }
 
+static const char *tcp_flags(u8_t fl)
+{
+#define FL_MAX 80
+	static char buf[FL_MAX];
+	char *s = buf;
+	*s = '\0';
+
+	if (fl) {
+		if (fl & SYN) {
+			s += sprintf(s, "SYN,");
+		}
+		if (fl & FIN) {
+			s += sprintf(s, "FIN,");
+		}
+		if (fl & ACK) {
+			s += sprintf(s, "ACK,");
+		}
+		if (fl & PSH) {
+			s += sprintf(s, "PSH,");
+		}
+		if (fl & RST) {
+			s += sprintf(s, "RST,");
+		}
+		if (fl & URG) {
+			s += sprintf(s, "URG,");
+		}
+		s[strlen(s) - 1] = '\0';
+		s--;
+	}
+
+	return buf;
+}
+
 static const char *tcp_th(struct net_pkt *pkt)
 {
 #define FL_MAX 80
@@ -566,12 +599,12 @@ static void tcp_out(struct tcp *conn, u8_t flags, ...)
 /* TCP state machine, everything happens here */
 static void tcp_in(struct tcp *conn, struct net_pkt *pkt)
 {
-	u8_t next = 0;
 	struct tcphdr *th = th_get(pkt);
+	u8_t next = 0, fl = th ? th->th_flags : 0;
 
 	tcp_dbg("%s", tcp_conn_state(conn, pkt));
 
-	if (ON(RST)) {
+	if (FL(&fl, &, RST)) {
 		conn_state(conn, TCP_CLOSED);
 	}
 next_state:
@@ -581,7 +614,7 @@ next_state:
 			tcp_out(conn, SYN);
 			conn_seq(conn, + 1);
 			next = TCP_SYN_SENT;
-		} else if (EQ(SYN)) {
+		} else if (FL(&fl, ==, SYN)) {
 			conn_ack(conn, th_seq(th) + 1); /* capture peer's isn */
 			next = TCP_SYN_RECEIVED;
 		}
@@ -592,15 +625,19 @@ next_state:
 		next = TCP_SYN_SENT;
 		break;
 	case TCP_SYN_SENT:
-		if (EQ(ACK, SEQ(==))) { /* passive open */
+		/* passive open */
+		if (FL(&fl, ==, ACK, th_seq(th) == conn->ack)) {
 			tcp_send_timer_cancel(conn);
 			next = TCP_ESTABLISHED;
+			break;
 		}
-		if (EQ(SYN | ACK, SEQ(==))) { /* active open */
+		/* active open */
+		if (FL(&fl, ==, (SYN | ACK), th_seq(th) == conn->ack)) {
 			tcp_send_timer_cancel(conn);
 			conn_ack(conn, th_seq(th) + 1);
 			tcp_out(conn, ACK);
 			next = TCP_ESTABLISHED;
+			break;
 		}
 		break;
 	case TCP_ESTABLISHED:
@@ -608,24 +645,26 @@ next_state:
 			ssize_t data_len;
 			tcp_out(conn, PSH, &data_len);
 			conn_seq(conn, + data_len);
+			break;
 		}
-		if (EQ(FIN | ACK, SEQ(==))) { /* full-close */
+		/* full-close */
+		if (FL(&fl, ==, (FIN | ACK), th_seq(th) == conn->ack)) {
 			conn_ack(conn, + 1);
-			tcp_out(conn, ACK);/* TODO: this could be optional */
+			tcp_out(conn, ACK);
 			next = TCP_CLOSE_WAIT;
 			break;
 		}
-		if (ON(PSH, SEQ(<))) {
+		if (FL(&fl, &, PSH, th_seq(th) < conn->ack)) {
 			tcp_out(conn, ACK); /* peer has resent */
 			break;
 		}
-		if (ON(PSH, SEQ(>))) {
+		if (FL(&fl, &, PSH, th_seq(th) > conn->ack)) {
 			tcp_out(conn, RST);
 			next = TCP_CLOSED;
 			break;
 		}
 		/* Non piggybacking version for clarity now */
-		if (ON(PSH, SEQ(==))) {
+		if (FL(&fl, &, PSH, th_seq(th) == conn->ack)) {
 			ssize_t len = tcp_data_get(conn, pkt);
 
 			if (len) {
@@ -641,8 +680,9 @@ next_state:
 				next = TCP_CLOSED;
 				break;
 			}
+			break;
 		}
-		if (EQ(ACK, SEQ(==))) {
+		if (FL(&fl, ==, ACK, th_seq(th) == conn->ack)) {
 			/* tcp_win_clear(&conn->snd); */
 		}
 		break; /* TODO: Catch all the rest here */
@@ -651,7 +691,7 @@ next_state:
 		next = TCP_LAST_ACK;
 		break;
 	case TCP_LAST_ACK:
-		if (EQ(ACK, SEQ(==))) {
+		if (FL(&fl, ==, ACK, th_seq(th) == conn->ack)) {
 			next = TCP_CLOSED;
 		}
 		break;
@@ -667,11 +707,8 @@ next_state:
 				tcp_state_to_str(conn->state, true));
 	}
 
-	if (th) {
-		tcp_assert(th->th_flags == 0, "Unconsumed flags: %s",
-				tcp_th(pkt));
-	}
-
+	tcp_assert(fl == 0, "Unconsumed flags: %s (%s)", tcp_flags(fl),
+			tcp_th(pkt));
 	if (next) {
 		th = NULL;
 		conn_state(conn, next);
