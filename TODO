@@ -10,7 +10,6 @@ Zephyr:
   to string (C1, high)
 - Add the support for IPv6 (C2, medium)
 - Merge tcp_out() and conn_seq()/conn_ack() (<=C1, medium)
-- Drop tcp_conn_kind? (<C1, medium)
 - Sanitize tp_input() (allow only JSON) (<C1, low)
 - Drop the first version of the test protocol (C1, low)
 - Make tp to register callback in order to be reusable (<C1, low)
