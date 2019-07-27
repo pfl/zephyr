@@ -165,11 +165,6 @@ enum tcp_state {
 	TCP_CLOSED
 };
 
-enum tcp_conn_kind {
-	TCP_PASSIVE = 0,
-	TCP_ACTIVE
-};
-
 struct tcp_win { /* TCP window */
 	char *name;
 	size_t len;
@@ -185,7 +180,6 @@ union tcp_endpoint {
 struct tcp { /* TCP connection */
 	sys_snode_t next;
 	enum tcp_state state;
-	enum tcp_conn_kind kind;
 	int fd;
 	u32_t seq;
 	u32_t ack;

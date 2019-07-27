@@ -285,7 +285,6 @@ static struct tcp *tcp_conn_new(struct net_pkt *pkt)
 
 	sys_slist_append(&tcp_conns, (sys_snode_t *) conn);
 	conn->state = TCP_LISTEN;
-	tcp_in(conn, NULL);
 
 	return conn;
 }
@@ -628,13 +627,13 @@ static void tcp_in(struct tcp *conn, struct net_pkt *pkt)
 next_state:
 	switch (conn->state) {
 	case TCP_LISTEN:
-		if (conn->kind == TCP_ACTIVE) {
+		if (FL(&fl, ==, SYN)) {
+			conn_ack(conn, th_seq(th) + 1); /* capture peer's isn */
+			next = TCP_SYN_RECEIVED;
+		} else {
 			tcp_out(conn, SYN);
 			conn_seq(conn, + 1);
 			next = TCP_SYN_SENT;
-		} else if (FL(&fl, ==, SYN)) {
-			conn_ack(conn, th_seq(th) + 1); /* capture peer's isn */
-			next = TCP_SYN_RECEIVED;
 		}
 		break;
 	case TCP_SYN_RECEIVED:
@@ -873,7 +872,6 @@ bool tp_input(struct net_pkt *pkt)
 			size_t len = tp_str_to_hex(data_to_send,
 						sizeof(data_to_send), tp->data);
 			conn = tcp_conn_new(pkt);
-			conn->kind = TCP_ACTIVE;
 			if (len > 0) {
 				tcp_win_push(conn->snd, data_to_send, len);
 			}
