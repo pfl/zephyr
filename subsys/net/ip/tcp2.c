@@ -210,6 +210,8 @@ static void tcp_send_process(struct k_timer *timer)
 
 static void tcp_send_timer_cancel(struct tcp *conn)
 {
+	tcp_assert(conn->in_retransmission == true, "Not in retransmission");
+
 	k_timer_stop(&conn->send_timer);
 
 	{
