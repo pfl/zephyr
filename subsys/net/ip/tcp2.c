@@ -67,41 +67,49 @@ static union tcp_endpoint *tcp_endpoint_new(struct net_pkt *pkt, int src)
 
 static const char *tcp_flags(u8_t fl)
 {
-#define FL_MAX 80
-	static char buf[FL_MAX];
+#define BUF_SIZE 80
+	static char buf[BUF_SIZE];
+	size_t buf_size = BUF_SIZE;
 	char *s = buf;
 	*s = '\0';
 
 	if (fl) {
 		if (fl & SYN) {
-			s += sprintf(s, "SYN,");
+			s += snprintf(s, buf_size, "SYN,");
+			buf_size -= s - buf;
 		}
 		if (fl & FIN) {
-			s += sprintf(s, "FIN,");
+			s += snprintf(s, buf_size, "FIN,");
+			buf_size -= s - buf;
 		}
 		if (fl & ACK) {
-			s += sprintf(s, "ACK,");
+			s += snprintf(s, buf_size, "ACK,");
+			buf_size -= s - buf;
 		}
 		if (fl & PSH) {
-			s += sprintf(s, "PSH,");
+			s += snprintf(s, buf_size, "PSH,");
+			buf_size -= s - buf;
 		}
 		if (fl & RST) {
-			s += sprintf(s, "RST,");
+			s += snprintf(s, buf_size, "RST,");
+			buf_size -= s - buf;
 		}
 		if (fl & URG) {
-			s += sprintf(s, "URG,");
+			s += snprintf(s, buf_size, "URG,");
+			buf_size -= s - buf;
 		}
 		s[strlen(s) - 1] = '\0';
 		s--;
 	}
-
+#undef BUF_SIZE
 	return buf;
 }
 
 static const char *tcp_th(struct net_pkt *pkt)
 {
-#define FL_MAX 80
-	static char buf[FL_MAX];
+#define BUF_SIZE 80
+	static char buf[BUF_SIZE];
+	size_t buf_size = BUF_SIZE;
 	char *s = buf;
 	struct net_ipv4_hdr *ip = ip_get(pkt);
 	struct tcphdr *th = th_get(pkt);
@@ -112,33 +120,41 @@ static const char *tcp_th(struct net_pkt *pkt)
 
 	if (fl) {
 		if (fl & SYN) {
-			s += sprintf(s, "SYN=%u,", th_seq(th));
+			s += snprintf(s, buf_size, "SYN=%u,", th_seq(th));
+			buf_size -= s - buf;
 		}
 		if (fl & FIN) {
-			s += sprintf(s, "FIN=%u,", th_seq(th));
+			s += snprintf(s, buf_size, "FIN=%u,", th_seq(th));
+			buf_size -= s - buf;
 		}
 		if (fl & ACK) {
-			s += sprintf(s, "ACK=%u,", th_ack(th));
+			s += snprintf(s, buf_size, "ACK=%u,", th_ack(th));
+			buf_size -= s - buf;
 		}
 		if (fl & PSH) {
-			s += sprintf(s, "PSH,");
+			s += snprintf(s, buf_size, "PSH,");
+			buf_size -= s - buf;
 		}
 		if (fl & RST) {
-			s += sprintf(s, "RST,");
+			s += snprintf(s, buf_size, "RST,");
+			buf_size -= s - buf;
 		}
 		if (fl & URG) {
-			s += sprintf(s, "URG,");
+			s += snprintf(s, buf_size, "URG,");
+			buf_size -= s - buf;
 		}
 		s[strlen(s) - 1] = '\0';
 		s--;
 	}
 
 	if (data_len) {
-		sprintf(s, ", len=%ld", data_len);
+		s += snprintf(s, buf_size, ", len=%ld", data_len);
+		buf_size -= s - buf;
 	}
 
 	tcp_assert(((bool)(PSH & fl)) == (data_len > 0),
 			"Invalid TCP packet: %s", buf);
+#undef BUF_SIZE
 	return buf;
 }
 
