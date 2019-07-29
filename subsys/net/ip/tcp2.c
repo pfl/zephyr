@@ -407,19 +407,22 @@ static size_t tcp_data_get(struct tcp *conn, struct net_pkt *pkt)
 	struct net_ipv4_hdr *ip = ip_get(pkt);
 	struct tcphdr *th = th_get(pkt);
 	ssize_t len = tcp_data_len(pkt);
-	void *buf = tcp_malloc(len);
 
-	net_pkt_skip(pkt, sizeof(*ip) + th->th_off * 4);
+	if (len > 0) {
+		void *buf = tcp_malloc(len);
 
-	net_pkt_read(pkt, buf, len);
+		net_pkt_skip(pkt, sizeof(*ip) + th->th_off * 4);
 
-	tcp_win_push(conn->rcv, buf, len);
+		net_pkt_read(pkt, buf, len);
 
-	if (tcp_echo) {
-		tcp_win_push(conn->snd, buf, len);
+		tcp_win_push(conn->rcv, buf, len);
+
+		if (tcp_echo) {
+			tcp_win_push(conn->snd, buf, len);
+		}
+
+		tcp_free(buf);
 	}
-
-	tcp_free(buf);
 
 	return len;
 }
@@ -910,7 +913,6 @@ bool tp_input(struct net_pkt *pkt)
 		tp_new_find_and_apply(tp_new, "tcp_echo", &tcp_echo, TP_BOOL);
 		tp_new_find_and_apply(tp_new, "tp_tcp_conn_delete",
 					&_tcp_conn_delete, TP_BOOL);
-
 		break;
 	case TP_INTROSPECT_REQUEST:
 		json_len = sizeof(buf);
