@@ -4,10 +4,11 @@ Complexity/effort: C1/C2/C4/C8 (weeks)
 Zephyr:
 
 - Complete TCP data unhappy paths (C2, high)
+- Add validation/sanity check on TCP options length (<=C1, high)
 - Integrate with subsys/net/ip/connection.c (=>C2, high)
-- Add tcp_win_peek() (<C1, high)
 - Change the encoding of TCP sequence numbers in test protocol
   to string (C1, high)
+- Add tcp_win_peek() (<C1, high)
 - Add the support for IPv6 (C2, medium)
 - Merge tcp_out() and conn_seq()/conn_ack() (<=C1, medium)
 - Sanitize tp_input() (allow only JSON) (<C1, low)
@@ -21,7 +22,6 @@ Zephyr:
 TTCN-3:
 
 - Add support for IPv4 options (<C1, medium)
-- Include test with TCP options (<C1, medium)
 - Document _listen and _connect (<C1, medium)
 - Implement RTT discovery (C1, low)
 - Include and document user scripts (<C1, low)
