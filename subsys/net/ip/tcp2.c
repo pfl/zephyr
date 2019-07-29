@@ -152,8 +152,10 @@ static const char *tcp_th(struct net_pkt *pkt)
 		buf_size -= s - buf;
 	}
 
-	tcp_assert(((bool)(PSH & fl)) == (data_len > 0),
-			"Invalid TCP packet: %s", buf);
+	if (((bool)(PSH & fl)) != (data_len > 0)) {
+		tcp_warn("Invalid TCP packet: %s, data_len=%zd", buf, data_len);
+	}
+
 #undef BUF_SIZE
 	return buf;
 }
