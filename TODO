@@ -4,7 +4,6 @@ Complexity/effort: C1/C2/C4/C8 (weeks)
 Zephyr:
 
 - Complete TCP data unhappy paths (C2, high)
-- Add validation/sanity check on TCP options length (<=C1, high)
 - Integrate with subsys/net/ip/connection.c (=>C2, high)
 - Change the encoding of TCP sequence numbers in test protocol
   to string (C1, high)
@@ -18,10 +17,3 @@ Zephyr:
   connection state changes (<=C1, low)
 - Track all net bufs through test protocol tracking functions
   (currently only network buffers in TCP windows are tracked) (<=C1, low)
-
-TTCN-3:
-
-- Add support for IPv4 options (<C1, medium)
-- Document _listen and _connect (<C1, medium)
-- Implement RTT discovery (C1, low)
-- Include and document user scripts (<C1, low)
