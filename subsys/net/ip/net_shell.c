@@ -1066,10 +1066,10 @@ static void tcp_cb(struct net_tcp *tcp, void *user_data)
 	u16_t recv_mss = net_tcp_get_recv_mss(tcp);
 
 	PR("%p %p   %5u    %5u %10u %10u %5u   %s\n",
-	   tcp, tcp->context,
-	   ntohs(net_sin6_ptr(&tcp->context->local)->sin6_port),
-	   ntohs(net_sin6(&tcp->context->remote)->sin6_port),
-	   tcp->send_seq, tcp->send_ack, recv_mss,
+	   tcp, net_tcp_context(tcp),
+	   ntohs(net_sin6_ptr(&net_tcp_context(tcp)->local)->sin6_port),
+	   ntohs(net_sin6(&net_tcp_context(tcp)->remote)->sin6_port),
+	   net_tcp_send_seq(tcp), net_tcp_send_ack(tcp), recv_mss,
 	   net_tcp_state_str(net_tcp_get_state(tcp)));
 
 	(*count)++;
@@ -1084,7 +1084,7 @@ static void tcp_sent_list_cb(struct net_tcp *tcp, void *user_data)
 	struct net_pkt *pkt;
 	struct net_pkt *tmp;
 
-	if (sys_slist_is_empty(&tcp->sent_list)) {
+	if (sys_slist_is_empty(net_tcp_sent_list(tcp)) {
 		return;
 	}
 
@@ -1096,7 +1096,7 @@ static void tcp_sent_list_cb(struct net_tcp *tcp, void *user_data)
 
 	PR("%p      ", tcp);
 
-	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&tcp->sent_list, pkt, tmp,
+	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(net_tcp_sent_list(tcp), pkt, tmp,
 					  sent_list) {
 		struct net_buf *frag = pkt->frags;
 

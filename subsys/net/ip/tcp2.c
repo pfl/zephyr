@@ -877,6 +877,45 @@ void tcp_connect(void) { }
 void tcp_accept(void) { }
 void tcp_close(void) { }
 
+#define net_tcp tcp
+struct net_context *net_tcp_context(struct net_tcp *tcp)
+{
+	return NULL;
+}
+
+u32_t net_tcp_send_seq(struct net_tcp *tcp)
+{
+	return 0;
+}
+
+u32_t net_tcp_send_ack(struct net_tcp *tcp)
+{
+	return 0;
+}
+
+sys_slist_t *net_tcp_sent_list(struct net_tcp *tcp)
+{
+	return NULL;
+}
+
+u16_t net_tcp_get_recv_mss(const struct net_tcp *tcp)
+{
+	return 0;
+}
+
+#define net_tcp_state tcp_state
+const char *net_tcp_state_str(enum net_tcp_state state)
+{
+	return NULL;
+}
+
+typedef void (*net_tcp_cb_t)(struct net_tcp *tcp, void *user_data);
+void net_tcp_foreach(net_tcp_cb_t cb, void *user_data)
+{
+	ARG_UNUSED(cb);
+	ARG_UNUSED(user_data);
+}
+
 #if IS_ENABLED(CONFIG_NET_TP)
 static sys_slist_t tp_q = SYS_SLIST_STATIC_INIT(&tp_q);
 

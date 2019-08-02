@@ -467,6 +467,26 @@ static inline bool net_tcp_ack_received(struct net_context *ctx, u32_t ack)
 }
 #endif
 
+static inline struct net_context *net_tcp_context(struct net_tcp *tcp)
+{
+	return tcp->context;
+}
+
+static inline u32_t net_tcp_send_seq(struct net_tcp *tcp)
+{
+	return tcp->send_seq;
+}
+
+static inline u32_t net_tcp_send_ack(struct net_tcp *tcp)
+{
+	return tcp->send_ack;
+}
+
+static inline sys_slist_t *net_tcp_sent_list(struct net_tcp *tcp)
+{
+	return &tcp->sent_list;
+}
+
 /**
  * @brief Calculates and returns the MSS for a given TCP context
  *
