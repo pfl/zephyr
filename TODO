@@ -17,3 +17,8 @@ Zephyr:
   connection state changes (<=C1, low)
 - Track all net bufs through test protocol tracking functions
   (currently only network buffers in TCP windows are tracked) (<=C1, low)
+- Drop the _tcp_conn_delete toggle, switch to the reference counting (<=C1, low)
+
+
+
+
