@@ -237,8 +237,6 @@ static void zsock_accepted_cb(struct net_context *new_ctx,
 		/* This just installs a callback, so cannot fail. */
 		(void)net_context_recv(new_ctx, zsock_received_cb, K_NO_WAIT,
 				       NULL);
-		k_fifo_init(&new_ctx->recv_q);
-
 		k_fifo_put(&parent->accept_q, new_ctx);
 	}
 }
@@ -416,6 +414,8 @@ int zsock_accept_ctx(struct net_context *parent, struct sockaddr *addr,
 	 * closing handshake for stack to perform.
 	 */
 	net_context_ref(ctx);
+
+	k_fifo_init(&ctx->recv_q);
 
 	NET_DBG("accept: ctx=%p, fd=%d", ctx, fd);
 
